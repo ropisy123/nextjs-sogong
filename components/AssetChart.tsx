@@ -45,7 +45,12 @@ const generateMockData = (type: 'daily' | 'weekly' | 'monthly') => {
   });
 };
 
-function calculateRelativeData(data: any[], selectedAssets: string[]) {
+type AssetEntry = {
+    date: string;
+    [key: string]: number | string; // 모든 자산 키가 string이고 값은 number 또는 string
+  };
+
+function calculateRelativeData(data: AssetEntry[], selectedAssets: string[]) {
   if (!data.length) return [];
   const base = data[0];
   return data.map((entry) => {
