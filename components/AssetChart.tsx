@@ -47,20 +47,23 @@ const generateMockData = (type: 'daily' | 'weekly' | 'monthly') => {
 
 type AssetEntry = {
     date: string;
-    [key: string]: number | string; // 모든 자산 키가 string이고 값은 number 또는 string
+    [key: string]: number | string;
   };
-
-function calculateRelativeData(data: AssetEntry[], selectedAssets: string[]) {
-  if (!data.length) return [];
-  const base = data[0];
-  return data.map((entry) => {
-    const newEntry = { date: entry.date };
-    selectedAssets.forEach((asset) => {
-      newEntry[asset] = ((entry[asset] - base[asset]) / base[asset]) * 100;
+  
+  function calculateRelativeData(data: AssetEntry[], selectedAssets: string[]) {
+    if (!data.length) return [];
+    const base = data[0];
+  
+    return data.map((entry) => {
+      const newEntry: { [key: string]: number | string } = { date: entry.date };
+      selectedAssets.forEach((asset) => {
+        const current = entry[asset] as number;
+        const initial = base[asset] as number;
+        newEntry[asset] = ((current - initial) / initial) * 100;
+      });
+      return newEntry;
     });
-    return newEntry;
-  });
-}
+  }
 
 export default function AssetChart() {
   const [selectedAssets, setSelectedAssets] = useState(["금리", "S&P 500"]);
