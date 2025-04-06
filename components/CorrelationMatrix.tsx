@@ -1,0 +1,168 @@
+// components/CorrelationTrendChart.tsx
+'use client';
+import { useState, useRef, useEffect } from 'react';
+import {
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  Tooltip,
+  Legend,
+  ResponsiveContainer,
+  CartesianGrid,
+} from 'recharts';
+
+const assetList = [
+  "금리",
+  "부동산",
+  "S&P 500",
+  "Kospi",
+  "Bitcoin",
+  "국채",
+  "원-달러 환율",
+  "금",
+];
+
+const generateMockCorrelationData = (scale: 'daily' | 'weekly' | 'monthly') => {
+  const length = scale === 'daily' ? 180 : scale === 'weekly' ? 104 : 60;
+  const label = scale === 'daily' ? 'Day' : scale === 'weekly' ? 'Week' : 'Month';
+  return Array.from({ length }, (_, i) => ({
+    date: `${label} ${i + 1}`,
+    correlation: parseFloat((Math.random() * 2 - 1).toFixed(2)),
+  }));
+};
+
+export default function CorrelationTrendChart() {
+  const [assetA, setAssetA] = useState("금리");
+  const [assetB, setAssetB] = useState("S&P 500");
+  const [scale, setScale] = useState<'daily' | 'weekly' | 'monthly'>('monthly');
+  const [data, setData] = useState(generateMockCorrelationData());
+  const [viewRange, setViewRange] = useState([0, 36]);
+
+  const containerRef = useRef<HTMLDivElement>(null);
+  const isDragging = useRef(false);
+  const dragStartX = useRef(0);
+
+  useEffect(() => {
+    setData(generateMockCorrelationData(scale));
+  }, [assetA, assetB, scale]);
+
+  const handleWheel = (e: WheelEvent) => {
+    e.preventDefault();
+    const delta = Math.sign(e.deltaY);
+    const rangeSize = viewRange[1] - viewRange[0];
+    let newSize = delta > 0 ? rangeSize + 6 : rangeSize - 6;
+    newSize = Math.max(6, Math.min(data.length, newSize));
+
+    const mid = Math.floor((viewRange[0] + viewRange[1]) / 2);
+    let newStart = Math.max(0, mid - Math.floor(newSize / 2));
+    let newEnd = Math.min(data.length, newStart + newSize);
+
+    if (newEnd - newStart < newSize) {
+      newStart = Math.max(0, newEnd - newSize);
+    }
+
+    setViewRange([newStart, newEnd]);
+  };
+
+  const handleMouseDown = (e: MouseEvent) => {
+    isDragging.current = true;
+    dragStartX.current = e.clientX;
+    document.body.style.userSelect = 'none';
+  };
+
+  const handleMouseUp = () => {
+    isDragging.current = false;
+    document.body.style.userSelect = '';
+  };
+
+  const handleMouseMove = (e: MouseEvent) => {
+    if (!isDragging.current) return;
+    const deltaX = e.clientX - dragStartX.current;
+    if (Math.abs(deltaX) < 10) return;
+    const offset = Math.round(deltaX / 10);
+    let newStart = Math.max(0, viewRange[0] - offset);
+    let newEnd = Math.min(data.length, viewRange[1] - offset);
+    if (newEnd - newStart === viewRange[1] - viewRange[0]) {
+      setViewRange([newStart, newEnd]);
+    }
+    dragStartX.current = e.clientX;
+  };
+
+  useEffect(() => {
+    const ref = containerRef.current;
+    if (ref) {
+      ref.addEventListener('wheel', handleWheel, { passive: false });
+      ref.addEventListener('mousedown', handleMouseDown);
+      ref.addEventListener('mouseup', handleMouseUp);
+      ref.addEventListener('mouseleave', handleMouseUp);
+      ref.addEventListener('mousemove', handleMouseMove);
+      return () => {
+        ref.removeEventListener('wheel', handleWheel);
+        ref.removeEventListener('mousedown', handleMouseDown);
+        ref.removeEventListener('mouseup', handleMouseUp);
+        ref.removeEventListener('mouseleave', handleMouseUp);
+        ref.removeEventListener('mousemove', handleMouseMove);
+      };
+    }
+  }, [viewRange]);
+
+  return (
+    <div ref={containerRef} className="bg-white p-4 rounded shadow select-none cursor-grab relative">
+      <h2 className="text-xl font-semibold mb-4">자산 상관관계 변동 싸이클</h2>
+      <div className="grid grid-cols-2 gap-4 mb-4">
+        <div className="flex items-center gap-2">
+          <label className="text-sm font-medium text-gray-700 whitespace-nowrap">A : </label>
+          <select
+            value={assetA}
+            onChange={(e) => setAssetA(e.target.value)}
+            className="border p-2 rounded w-full"
+          >
+            {assetList.map((asset) => (
+              <option key={asset} value={asset}>
+                {asset}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="flex items-center gap-2">
+          <label className="text-sm font-medium text-gray-700 whitespace-nowrap">B : </label>
+          <select
+            value={assetB}
+            onChange={(e) => setAssetB(e.target.value)}
+            className="border p-2 rounded w-full"
+          >
+            {assetList.map((asset) => (
+              <option key={asset} value={asset}>
+                {asset}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+      <ResponsiveContainer width="100%" height={300}>
+        <LineChart data={data.slice(viewRange[0], viewRange[1])}>
+          <CartesianGrid strokeDasharray="3 3" />
+          <XAxis dataKey="date" />
+          <YAxis domain={[-1, 1]} />
+          <Tooltip />
+          <Legend />
+          <Line type="monotone" dataKey="correlation" stroke="#6366F1" strokeWidth={2} dot={false} />
+        </LineChart>
+      </ResponsiveContainer>
+      <div className="absolute bottom-4 right-4 flex gap-2">
+        {['daily', 'weekly', 'monthly'].map((type) => (
+          <button
+            key={type}
+            onClick={() => setScale(type as 'daily' | 'weekly' | 'monthly')}
+            className={`px-3 py-1 border rounded text-sm ${
+              scale === type ? 'bg-gray-300 text-black' : 'bg-white text-gray-700'
+            }`}
+          >
+            {type === 'daily' ? '일' : type === 'weekly' ? '주' : '월'}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
