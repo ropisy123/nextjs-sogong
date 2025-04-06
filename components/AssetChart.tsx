@@ -45,7 +45,7 @@ const generateMockData = (type: 'daily' | 'weekly' | 'monthly') => {
   });
 };
 
-function calculateRelativeData(data, selectedAssets) {
+function calculateRelativeData(data: any[], selectedAssets) {
   if (!data.length) return [];
   const base = data[0];
   return data.map((entry) => {
