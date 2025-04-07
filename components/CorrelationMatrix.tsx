@@ -38,13 +38,19 @@ export default function CorrelationTrendChart() {
   const [scale, setScale] = useState<'daily' | 'weekly' | 'monthly'>('monthly');
   const [data, setData] = useState(generateMockCorrelationData(scale));
   const [viewRange, setViewRange] = useState([0, 36]);
+  const [showWarning, setShowWarning] = useState(false);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const isDragging = useRef(false);
   const dragStartX = useRef(0);
 
   useEffect(() => {
-    setData(generateMockCorrelationData(scale));
+    if (assetA === assetB) {
+      setShowWarning(true);
+    } else {
+      setShowWarning(false);
+      setData(generateMockCorrelationData(scale));
+    }
   }, [assetA, assetB, scale]);
 
   const handleWheel = (e: WheelEvent) => {
@@ -110,6 +116,11 @@ export default function CorrelationTrendChart() {
   return (
     <div ref={containerRef} className="bg-white p-4 rounded shadow select-none cursor-grab relative">
       <h2 className="text-xl font-semibold mb-4">자산 상관관계 변동 싸이클</h2>
+      {showWarning && (
+        <div className="mb-4 p-2 bg-yellow-100 text-yellow-800 border border-yellow-300 rounded text-sm">
+          자산 A와 B는 서로 달라야 합니다. 다른 자산을 선택해주세요.
+        </div>
+      )}
       <div className="grid grid-cols-2 gap-4 mb-4">
         <div className="flex items-center gap-2">
           <label className="text-sm font-medium text-gray-700 whitespace-nowrap">A : </label>
@@ -140,16 +151,18 @@ export default function CorrelationTrendChart() {
           </select>
         </div>
       </div>
-      <ResponsiveContainer width="100%" height={300}>
-        <LineChart data={data.slice(viewRange[0], viewRange[1])}>
-          <CartesianGrid strokeDasharray="3 3" />
-          <XAxis dataKey="date" />
-          <YAxis domain={[-1, 1]} />
-          <Tooltip />
-          <Legend />
-          <Line type="monotone" dataKey="correlation" stroke="#6366F1" strokeWidth={2} dot={false} />
-        </LineChart>
-      </ResponsiveContainer>
+      {!showWarning && (
+        <ResponsiveContainer width="100%" height={300}>
+          <LineChart data={data.slice(viewRange[0], viewRange[1])}>
+            <CartesianGrid strokeDasharray="3 3" />
+            <XAxis dataKey="date" />
+            <YAxis domain={[-1, 1]} />
+            <Tooltip />
+            <Legend />
+            <Line type="monotone" dataKey="correlation" stroke="#6366F1" strokeWidth={2} dot={false} />
+          </LineChart>
+        </ResponsiveContainer>
+      )}
       <div className="absolute bottom-4 right-4 flex gap-2">
         {['daily', 'weekly', 'monthly'].map((type) => (
           <button
