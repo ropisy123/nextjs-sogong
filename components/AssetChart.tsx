@@ -1,4 +1,3 @@
-
 // components/AssetChart.tsx
 'use client';
 import { useEffect, useState, useRef } from 'react';
@@ -46,24 +45,23 @@ const generateMockData = (type: 'daily' | 'weekly' | 'monthly') => {
 };
 
 type AssetEntry = {
-    date: string;
-    [key: string]: number | string;
-  };
-  
-  function calculateRelativeData(data: AssetEntry[], selectedAssets: string[]) {
-    if (!data.length) return [];
-    const base = data[0];
-  
-    return data.map((entry) => {
-      const newEntry: { [key: string]: number | string } = { date: entry.date };
-      selectedAssets.forEach((asset) => {
-        const current = entry[asset] as number;
-        const initial = base[asset] as number;
-        newEntry[asset] = ((current - initial) / initial) * 100;
-      });
-      return newEntry;
+  date: string;
+  [key: string]: number | string;
+};
+
+function calculateRelativeData(data: AssetEntry[], selectedAssets: string[]) {
+  if (!data.length) return [];
+  const base = data[0];
+  return data.map((entry) => {
+    const newEntry: { [key: string]: number | string } = { date: entry.date };
+    selectedAssets.forEach((asset) => {
+      const current = entry[asset] as number;
+      const initial = base[asset] as number;
+      newEntry[asset] = ((current - initial) / initial) * 100;
     });
-  }
+    return newEntry;
+  });
+}
 
 export default function AssetChart() {
   const [selectedAssets, setSelectedAssets] = useState(["금리", "S&P 500"]);
@@ -85,9 +83,7 @@ export default function AssetChart() {
 
   const toggleAsset = (asset: string) => {
     setSelectedAssets((prev) =>
-      prev.includes(asset)
-        ? prev.filter((a) => a !== asset)
-        : [...prev, asset]
+      prev.includes(asset) ? prev.filter((a) => a !== asset) : [...prev, asset]
     );
   };
 
@@ -97,15 +93,12 @@ export default function AssetChart() {
     const rangeSize = viewRange[1] - viewRange[0];
     let newSize = delta > 0 ? rangeSize + 6 : rangeSize - 6;
     newSize = Math.max(6, Math.min(rawData.length, newSize));
-
     const mid = Math.floor((viewRange[0] + viewRange[1]) / 2);
     let newStart = Math.max(0, mid - Math.floor(newSize / 2));
     let newEnd = Math.min(rawData.length, newStart + newSize);
-
     if (newEnd - newStart < newSize) {
       newStart = Math.max(0, newEnd - newSize);
     }
-
     setViewRange([newStart, newEnd]);
   };
 
@@ -133,6 +126,54 @@ export default function AssetChart() {
     dragStartX.current = e.clientX;
   };
 
+  const touchStartX = useRef(0);
+  const pinchStartDist = useRef(0);
+  const touchMode = useRef<'drag' | 'pinch' | null>(null);
+
+  const handleTouchStart = (e: TouchEvent) => {
+    if (e.touches.length === 1) {
+      touchMode.current = 'drag';
+      touchStartX.current = e.touches[0].clientX;
+    } else if (e.touches.length === 2) {
+      touchMode.current = 'pinch';
+      const dx = e.touches[0].clientX - e.touches[1].clientX;
+      pinchStartDist.current = Math.abs(dx);
+    }
+  };
+
+  const handleTouchMove = (e: TouchEvent) => {
+    if (touchMode.current === 'drag' && e.touches.length === 1) {
+      const deltaX = e.touches[0].clientX - touchStartX.current;
+      if (Math.abs(deltaX) < 10) return;
+      const offset = Math.round(deltaX / 10);
+      let newStart = Math.max(0, viewRange[0] - offset);
+      let newEnd = Math.min(rawData.length, viewRange[1] - offset);
+      if (newEnd - newStart === viewRange[1] - viewRange[0]) {
+        setViewRange([newStart, newEnd]);
+      }
+      touchStartX.current = e.touches[0].clientX;
+    } else if (touchMode.current === 'pinch' && e.touches.length === 2) {
+      const dx = e.touches[0].clientX - e.touches[1].clientX;
+      const pinchDist = Math.abs(dx);
+      const delta = pinchDist - pinchStartDist.current;
+      const rangeSize = viewRange[1] - viewRange[0];
+      let newSize = delta < 0 ? rangeSize + 6 : rangeSize - 6;
+      newSize = Math.max(6, Math.min(rawData.length, newSize));
+      const mid = Math.floor((viewRange[0] + viewRange[1]) / 2);
+      let newStart = Math.max(0, mid - Math.floor(newSize / 2));
+      let newEnd = Math.min(rawData.length, newStart + newSize);
+      if (newEnd - newStart < newSize) {
+        newStart = Math.max(0, newEnd - newSize);
+      }
+      setViewRange([newStart, newEnd]);
+      pinchStartDist.current = pinchDist;
+    }
+  };
+
+  const handleTouchEnd = () => {
+    touchMode.current = null;
+  };
+
   useEffect(() => {
     const ref = containerRef.current;
     if (ref) {
@@ -141,12 +182,21 @@ export default function AssetChart() {
       ref.addEventListener('mouseup', handleMouseUp);
       ref.addEventListener('mouseleave', handleMouseUp);
       ref.addEventListener('mousemove', handleMouseMove);
+
+      ref.addEventListener('touchstart', handleTouchStart, { passive: false });
+      ref.addEventListener('touchmove', handleTouchMove, { passive: false });
+      ref.addEventListener('touchend', handleTouchEnd);
+
       return () => {
         ref.removeEventListener('wheel', handleWheel);
         ref.removeEventListener('mousedown', handleMouseDown);
         ref.removeEventListener('mouseup', handleMouseUp);
         ref.removeEventListener('mouseleave', handleMouseUp);
         ref.removeEventListener('mousemove', handleMouseMove);
+
+        ref.removeEventListener('touchstart', handleTouchStart);
+        ref.removeEventListener('touchmove', handleTouchMove);
+        ref.removeEventListener('touchend', handleTouchEnd);
       };
     }
   }, [viewRange]);
