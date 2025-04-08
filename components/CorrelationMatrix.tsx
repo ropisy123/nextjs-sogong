@@ -36,7 +36,7 @@ export default function CorrelationTrendChart() {
   const [assetB, setAssetB] = useState("S&P 500");
   const [scale, setScale] = useState<'daily' | 'weekly' | 'monthly'>('monthly');
   const [data, setData] = useState(generateMockCorrelationData(scale));
-  const [viewRange, setViewRange] = useState([0, 36]);
+  const [viewRange, setViewRange] = useState<[number, number]>([0, 36]);
   const [showWarning, setShowWarning] = useState(false);
 
   const containerRef = useRef<HTMLDivElement>(null);
