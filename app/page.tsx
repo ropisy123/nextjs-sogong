@@ -5,7 +5,7 @@ export default function Home() {
   return (
     <main className="p-6 min-h-screen bg-gray-100 flex flex-col justify-between">
       <div>
-        <h1 className="text-3xl font-bold mb-4"> 자산 싸이클 분석 </h1>
+      <h1 className="text-3xl font-bold mb-4 text-black">자산 싸이클 분석</h1>
         <Dashboard />
       </div>
       <footer className="text-xs text-gray-500 mt-10 border-t pt-4">

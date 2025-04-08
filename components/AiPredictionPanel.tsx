@@ -1,4 +1,3 @@
-
 // components/AiPredictionPanel.tsx
 'use client';
 import { useState } from 'react';
@@ -42,7 +41,7 @@ export default function AiPredictionPanel() {
 
   return (
     <div className="bg-white p-4 rounded shadow">
-      <h2 className="text-xl font-semibold mb-4">AI 예측 결과</h2>
+      <h2 className="text-xl font-semibold mb-2 text-black">AI 예측 결과</h2>
       <div className="mb-4 flex flex-wrap gap-2">
         {assets.map((asset) => (
           <button
@@ -62,7 +61,7 @@ export default function AiPredictionPanel() {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {predictions.map(({ model, rise, stay, fall }) => (
           <div key={model} className="p-4 border rounded bg-gray-50 shadow-sm">
-            <h3 className="text-center font-semibold mb-2 flex items-center justify-center gap-2">
+            <h3 className="text-center font-semibold mb-2 flex items-center justify-center gap-2 text-black">
               <Image
                 src={modelImages[model]}
                 alt={model}

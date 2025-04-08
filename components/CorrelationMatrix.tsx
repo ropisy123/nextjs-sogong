@@ -1,4 +1,3 @@
-// components/CorrelationTrendChart.tsx
 'use client';
 import { useState, useRef, useEffect } from 'react';
 import {
@@ -44,12 +43,17 @@ export default function CorrelationTrendChart() {
   const isDragging = useRef(false);
   const dragStartX = useRef(0);
 
+  const touchStartRef = useRef<{ x: number; y: number } | null>(null);
+  const lastTouchDistance = useRef<number | null>(null);
+  const lastViewRange = useRef<[number, number]>([0, 36]);
+
   useEffect(() => {
     if (assetA === assetB) {
       setShowWarning(true);
     } else {
       setShowWarning(false);
       setData(generateMockCorrelationData(scale));
+      setViewRange([0, scale === 'daily' ? 60 : scale === 'weekly' ? 36 : 24]);
     }
   }, [assetA, assetB, scale]);
 
@@ -95,6 +99,59 @@ export default function CorrelationTrendChart() {
     dragStartX.current = e.clientX;
   };
 
+  const getDistance = (touches: TouchList) => {
+    if (touches.length < 2) return 0;
+    const dx = touches[0].clientX - touches[1].clientX;
+    const dy = touches[0].clientY - touches[1].clientY;
+    return Math.sqrt(dx * dx + dy * dy);
+  };
+
+  const handleTouchStart = (e: TouchEvent) => {
+    if (e.touches.length === 1) {
+      touchStartRef.current = {
+        x: e.touches[0].clientX,
+        y: e.touches[0].clientY,
+      };
+      lastViewRange.current = [...viewRange];
+    } else if (e.touches.length === 2) {
+      lastTouchDistance.current = getDistance(e.touches);
+    }
+  };
+
+  const handleTouchMove = (e: TouchEvent) => {
+    if (e.touches.length === 1 && touchStartRef.current) {
+      const deltaX = e.touches[0].clientX - touchStartRef.current.x;
+      const offset = Math.round(deltaX / 10);
+      let newStart = Math.max(0, lastViewRange.current[0] - offset);
+      let newEnd = Math.min(data.length, lastViewRange.current[1] - offset);
+      if (newEnd - newStart === viewRange[1] - viewRange[0]) {
+        setViewRange([newStart, newEnd]);
+      }
+    } else if (e.touches.length === 2 && lastTouchDistance.current !== null) {
+      const newDistance = getDistance(e.touches);
+      const scaleChange = newDistance - lastTouchDistance.current;
+
+      const rangeSize = viewRange[1] - viewRange[0];
+      let newSize = scaleChange > 0 ? rangeSize - 6 : rangeSize + 6;
+      newSize = Math.max(6, Math.min(data.length, newSize));
+
+      const mid = Math.floor((viewRange[0] + viewRange[1]) / 2);
+      let newStart = Math.max(0, mid - Math.floor(newSize / 2));
+      let newEnd = Math.min(data.length, newStart + newSize);
+      if (newEnd - newStart < newSize) {
+        newStart = Math.max(0, newEnd - newSize);
+      }
+
+      setViewRange([newStart, newEnd]);
+      lastTouchDistance.current = newDistance;
+    }
+  };
+
+  const handleTouchEnd = () => {
+    touchStartRef.current = null;
+    lastTouchDistance.current = null;
+  };
+
   useEffect(() => {
     const ref = containerRef.current;
     if (ref) {
@@ -103,19 +160,28 @@ export default function CorrelationTrendChart() {
       ref.addEventListener('mouseup', handleMouseUp);
       ref.addEventListener('mouseleave', handleMouseUp);
       ref.addEventListener('mousemove', handleMouseMove);
+
+      ref.addEventListener('touchstart', handleTouchStart, { passive: false });
+      ref.addEventListener('touchmove', handleTouchMove, { passive: false });
+      ref.addEventListener('touchend', handleTouchEnd);
+
       return () => {
         ref.removeEventListener('wheel', handleWheel);
         ref.removeEventListener('mousedown', handleMouseDown);
         ref.removeEventListener('mouseup', handleMouseUp);
         ref.removeEventListener('mouseleave', handleMouseUp);
         ref.removeEventListener('mousemove', handleMouseMove);
+
+        ref.removeEventListener('touchstart', handleTouchStart);
+        ref.removeEventListener('touchmove', handleTouchMove);
+        ref.removeEventListener('touchend', handleTouchEnd);
       };
     }
-  }, [viewRange]);
+  }, [viewRange, data]);
 
   return (
     <div ref={containerRef} className="bg-white p-4 rounded shadow select-none cursor-grab relative">
-      <h2 className="text-xl font-semibold mb-4">자산 상관관계 변동 싸이클</h2>
+      <h2 className="text-xl font-semibold mb-2 text-black">자산 상관관계 변동 싸이클</h2>
       {showWarning && (
         <div className="mb-4 p-2 bg-yellow-100 text-yellow-800 border border-yellow-300 rounded text-sm">
           자산 A와 B는 서로 달라야 합니다. 다른 자산을 선택해주세요.

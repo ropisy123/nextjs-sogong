@@ -1,4 +1,3 @@
-// components/AssetChart.tsx
 'use client';
 import { useEffect, useState, useRef } from 'react';
 import {
@@ -49,22 +48,35 @@ type AssetEntry = {
   [key: string]: number | string;
 };
 
-function calculateRelativeData(data: AssetEntry[], selectedAssets: string[]) {
+function calculateNormalizedData(data: AssetEntry[], selectedAssets: string[]) {
   if (!data.length) return [];
-  const base = data[0];
+
+  const minMaxMap: Record<string, { min: number; max: number }> = {};
+
+  selectedAssets.forEach((asset) => {
+    const values = data.map((entry) => entry[asset] as number);
+    const min = Math.min(...values);
+    const max = Math.max(...values);
+    minMaxMap[asset] = { min, max };
+  });
+
   return data.map((entry) => {
     const newEntry: { [key: string]: number | string } = { date: entry.date };
     selectedAssets.forEach((asset) => {
-      const current = entry[asset] as number;
-      const initial = base[asset] as number;
-      newEntry[asset] = ((current - initial) / initial) * 100;
+      const value = entry[asset] as number;
+      const { min, max } = minMaxMap[asset];
+      if (max === min) {
+        newEntry[asset] = 0; // 변동 없는 경우
+      } else {
+        newEntry[asset] = ((value - min) / (max - min)) * 200 - 100;
+      }
     });
     return newEntry;
   });
 }
 
 export default function AssetChart() {
-  const [selectedAssets, setSelectedAssets] = useState(["금리", "S&P 500"]);
+  const [selectedAssets, setSelectedAssets] = useState(["S&P 500"]);
   const [scale, setScale] = useState<'daily' | 'weekly' | 'monthly'>('monthly');
   const [rawData, setRawData] = useState(generateMockData(scale));
   const [viewRange, setViewRange] = useState([0, 36]);
@@ -73,13 +85,17 @@ export default function AssetChart() {
   const isDragging = useRef(false);
   const dragStartX = useRef(0);
 
+  const touchStartX = useRef(0);
+  const pinchStartDist = useRef(0);
+  const touchMode = useRef<'drag' | 'pinch' | null>(null);
+
   useEffect(() => {
     const newData = generateMockData(scale);
     setRawData(newData);
     setViewRange([0, scale === 'daily' ? 90 : scale === 'weekly' ? 52 : 36]);
   }, [scale]);
 
-  const data = calculateRelativeData(rawData.slice(viewRange[0], viewRange[1]), selectedAssets);
+  const data = calculateNormalizedData(rawData.slice(viewRange[0], viewRange[1]), selectedAssets);
 
   const toggleAsset = (asset: string) => {
     setSelectedAssets((prev) =>
@@ -125,10 +141,6 @@ export default function AssetChart() {
     }
     dragStartX.current = e.clientX;
   };
-
-  const touchStartX = useRef(0);
-  const pinchStartDist = useRef(0);
-  const touchMode = useRef<'drag' | 'pinch' | null>(null);
 
   const handleTouchStart = (e: TouchEvent) => {
     if (e.touches.length === 1) {
@@ -206,7 +218,7 @@ export default function AssetChart() {
       ref={containerRef}
       className="bg-white p-4 rounded shadow cursor-grab select-none relative"
     >
-      <h2 className="text-xl font-semibold mb-2">자산 변동 싸이클 (%)</h2>
+      <h2 className="text-xl font-semibold mb-2 text-black">자산 변동 싸이클 (정규화 %)</h2>
       <div className="mb-3 flex flex-wrap gap-2">
         {Object.keys(assetColors).map((asset) => (
           <button
@@ -226,7 +238,7 @@ export default function AssetChart() {
         <LineChart data={data}>
           <CartesianGrid strokeDasharray="3 3" />
           <XAxis dataKey="date" />
-          <YAxis domain={['auto', 'auto']} tickFormatter={(v) => `${v.toFixed(0)}%`} />
+          <YAxis domain={[-100, 100]} tickFormatter={(v) => `${v.toFixed(0)}%`} />
           <Tooltip formatter={(value) => `${(value as number).toFixed(2)}%`} />
           <Legend />
           {selectedAssets.map((asset) => (
