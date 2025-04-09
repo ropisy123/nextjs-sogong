@@ -58,7 +58,7 @@ export default function AiPredictionPanel() {
     }
   };
 */
-  const fetchLLMSummary = async (period: string, lossRate: string) => {
+  const fetchLLMSummary = async (period: string, lossRate: string): Promise<string> => {
     // 테스트용 더미 요약
     const mockSummary = `
   📈 예측 요약 (${period}, 손실 허용률: ${lossRate})
