@@ -16,8 +16,6 @@ const assetColors = {
   "S&P 500": '#10B981',
   "Kospi": '#6366F1',
   "Bitcoin": '#EF4444',
-  "국채": '#3B82F6',
-  "원-달러 환율": '#8B5CF6',
   "금": '#FFD700',
   "부동산": '#F97316',
   "금리": '#0EA5E9',
@@ -102,6 +100,7 @@ function calculateNormalizedData(data: AssetEntry[], selectedAssets: string[]) {
   const minMaxMap: Record<string, { min: number; max: number }> = {};
 
   selectedAssets.forEach((asset) => {
+    if (asset === "금리") return; // 금리는 정규화하지 않음
     const values = data
       .map((entry) => entry[asset])
       .filter((v): v is number => typeof v === 'number');
@@ -115,9 +114,15 @@ function calculateNormalizedData(data: AssetEntry[], selectedAssets: string[]) {
     selectedAssets.forEach((asset) => {
       const value = entry[asset];
       if (typeof value !== 'number') return;
-      const { min, max } = minMaxMap[asset];
-      newEntry[asset] = max === min ? 0 : ((value - min) / (max - min)) * 200 - 100;
+
       newEntry[`${asset}_original`] = value;
+
+      if (asset === "금리") {
+        newEntry[asset] = value; // 금리는 정규화하지 않고 원래 값
+      } else {
+        const { min, max } = minMaxMap[asset];
+        newEntry[asset] = max === min ? 0 : ((value - min) / (max - min)) * 100;
+      }
     });
     return newEntry;
   });
@@ -166,11 +171,14 @@ export default function AssetChart() {
   const [selectedAssets, setSelectedAssets] = useState(["S&P 500"]);
   const [scale, setScale] = useState<'daily' | 'weekly' | 'monthly'>('daily');
   const [rawData, setRawData] = useState<AssetEntry[]>([]);
-  const [viewRange, setViewRange] = useState([0, 90]);
+  const [viewRange, setViewRange] = useState<[number, number]>([0, 90]);
+  const isInitial = useRef(true);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const isDragging = useRef(false);
   const dragStartX = useRef(0);
+
+
 
   const handleWheel = (e: WheelEvent) => {
     e.preventDefault();
@@ -204,9 +212,15 @@ export default function AssetChart() {
     const scaled = downsampleData(rawData, scale);
     const length = scale === 'monthly' ? 7 : scale === 'weekly' ? 52 : 90;
     const total = scaled.length;
-    setViewRange([Math.max(0, total - length), total]);
+  
+    // 최초 로딩이거나 scale이 바뀔 때만 viewRange 초기화
+    if (isInitial.current || viewRange[1] > total || viewRange[1] - viewRange[0] < 6) {
+      setViewRange([Math.max(0, total - length), total]);
+    }
+  
+    isInitial.current = false;
   }, [scale, rawData]);
-
+  
   useEffect(() => {
     const ref = containerRef.current;
     if (ref) {
@@ -237,7 +251,7 @@ export default function AssetChart() {
       ref={containerRef}
       className="bg-white p-4 rounded shadow cursor-grab select-none relative"
     >
-      <h2 className="text-xl font-semibold mb-2 text-black">자산 변동 싸이클 (정규화 %)</h2>
+      <h2 className="text-xl font-semibold mb-2 text-black">자산 변동 싸이클</h2>
       <div className="mb-3 flex flex-wrap gap-2">
         {Object.keys(assetColors).map((asset) => (
           <button
@@ -268,12 +282,37 @@ export default function AssetChart() {
               return value;
             }}
           />
-          <YAxis domain={[-100, 100]} tickFormatter={(v) => `${v.toFixed(0)}%`} />
+          {/* 왼쪽 Y축 - 정규화된 자산 */}
+          <YAxis
+            yAxisId="left"
+            domain={[0, 100]}
+            tickFormatter={(v) => `${v.toFixed(0)}%`}
+          />
+          {/* 오른쪽 Y축 - 금리 (원래 값) */}
+          {selectedAssets.includes("금리") && (
+            <YAxis
+              yAxisId="right"
+              orientation="right"
+              tickFormatter={(v) => v.toFixed(2)}
+              domain={() => {
+                const values = data
+                  .map(d => d["금리"])
+                  .filter((v): v is number => typeof v === 'number');
+                const min = Math.min(...values);
+                const max = Math.max(...values);
+                return [min, max];
+              }}
+            />
+          )}
           <Tooltip
             formatter={(v: any, name: string, props: any) => {
               const original = props.payload[`${name}_original`];
-              const percent = (v as number).toFixed(2);
-              return [`${percent}% (원: ${original?.toFixed?.(2) ?? 'N/A'})`, name];
+              return [
+                name === "금리"
+                  ? `${original?.toFixed?.(2) ?? 'N/A'}`
+                  : `${(v as number).toFixed(2)}% (원: ${original?.toFixed?.(2) ?? 'N/A'})`,
+                name,
+              ];
             }}
           />
           <Legend />
@@ -285,6 +324,7 @@ export default function AssetChart() {
               stroke={assetColors[asset as keyof typeof assetColors]}
               strokeWidth={2}
               dot={false}
+              yAxisId={asset === "금리" ? "right" : "left"}
             />
           ))}
         </LineChart>
@@ -301,12 +341,14 @@ export default function AssetChart() {
             {type === 'daily' ? '일' : type === 'weekly' ? '주' : '월'}
           </button>
         ))}
+{/*}
         <button
           onClick={exportCacheToCSV}
           className="px-3 py-1 border rounded text-sm bg-green-500 text-white"
         >
           Raw Data 다운로드
         </button>
+*/}      
       </div>
     </div>
   );

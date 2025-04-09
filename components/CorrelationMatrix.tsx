@@ -15,8 +15,6 @@ const assetList = [
   "S&P 500",
   "Kospi",
   "Bitcoin",
-  "국채",
-  "원-달러 환율",
   "금",
   "부동산",
   "금리",
