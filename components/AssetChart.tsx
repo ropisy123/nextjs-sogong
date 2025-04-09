@@ -10,37 +10,17 @@ import {
   ResponsiveContainer,
   CartesianGrid,
 } from 'recharts';
+import { saveAs } from 'file-saver';
 
 const assetColors = {
-  "금리": '#0EA5E9',
-  "부동산": '#F97316',
   "S&P 500": '#10B981',
   "Kospi": '#6366F1',
   "Bitcoin": '#EF4444',
   "국채": '#3B82F6',
   "원-달러 환율": '#8B5CF6',
   "금": '#FFD700',
-};
-
-const generateMockData = (type: 'daily' | 'weekly' | 'monthly') => {
-  const length = type === 'daily' ? 180 : type === 'weekly' ? 104 : 60;
-  const label = type === 'daily' ? 'Day' : type === 'weekly' ? 'Week' : 'Month';
-  return Array.from({ length }).map((_, i) => {
-    const base = {
-      "금리": 2 + Math.random() * 3,
-      "부동산": 100 + Math.random() * 20,
-      "S&P 500": 3000 + Math.random() * 500,
-      "Kospi": 2500 + Math.random() * 300,
-      "Bitcoin": 20000 + Math.random() * 10000,
-      "국채": 90 + Math.random() * 10,
-      "원-달러 환율": 1100 + Math.random() * 100,
-      "금": 1800 + Math.random() * 100,
-    };
-    return {
-      date: `${label} ${i + 1}`,
-      ...base,
-    };
-  });
+  "부동산": '#F97316',
+  "금리": '#0EA5E9',
 };
 
 type AssetEntry = {
@@ -48,13 +28,83 @@ type AssetEntry = {
   [key: string]: number | string;
 };
 
+const cache: Record<string, AssetEntry[]> = {};
+
+function exportCacheToCSV() {
+  const allDates = new Set<string>();
+  Object.values(cache).flat().forEach((row) => allDates.add(row.date));
+  const sortedDates = Array.from(allDates).sort();
+
+  const allAssets = Object.keys(cache);
+  const rows = [['date', ...allAssets].join(',')];
+
+  for (const date of sortedDates) {
+    const row = [date];
+    for (const asset of allAssets) {
+      const found = cache[asset].find(d => d.date === date);
+      row.push(found ? String(found[asset]) : '');
+    }
+    rows.push(row.join(','));
+  }
+
+  const blob = new Blob([rows.join('\n')], { type: 'text/csv;charset=utf-8' });
+  saveAs(blob, 'asset_cache.csv');
+}
+
+async function fetchAssetDataReal(assets: string[]): Promise<AssetEntry[]> {
+  const missing = assets.filter(asset => !cache[asset]);
+  if (missing.length) {
+    const res = await fetch('/api/asset-data', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ assets: missing }),
+    });
+    const newData: AssetEntry[] = await res.json();
+    newData.forEach((row) => {
+      for (const asset of missing) {
+        if (row[asset] !== undefined) {
+          if (!cache[asset]) cache[asset] = [];
+          cache[asset].push({ date: row.date, [asset]: row[asset] });
+        }
+      }
+    });
+  }
+
+  const allDates = new Set<string>();
+  assets.forEach(asset => {
+    (cache[asset] || []).forEach(row => allDates.add(row.date));
+  });
+
+  const sortedDates = Array.from(allDates).sort();
+  const mergedMap = new Map<string, AssetEntry>();
+  let lastValues: Record<string, number> = {};
+
+  for (const date of sortedDates) {
+    const row: AssetEntry = { date };
+    for (const asset of assets) {
+      const entry = cache[asset]?.find(d => d.date === date);
+      if (entry && typeof entry[asset] === 'number') {
+        row[asset] = entry[asset];
+        lastValues[asset] = entry[asset] as number;
+      } else if (lastValues[asset] !== undefined) {
+        row[asset] = lastValues[asset];
+      }
+    }
+    mergedMap.set(date, row);
+  }
+
+  return Array.from(mergedMap.values());
+}
+
 function calculateNormalizedData(data: AssetEntry[], selectedAssets: string[]) {
   if (!data.length) return [];
 
   const minMaxMap: Record<string, { min: number; max: number }> = {};
 
   selectedAssets.forEach((asset) => {
-    const values = data.map((entry) => entry[asset] as number);
+    const values = data
+      .map((entry) => entry[asset])
+      .filter((v): v is number => typeof v === 'number');
     const min = Math.min(...values);
     const max = Math.max(...values);
     minMaxMap[asset] = { min, max };
@@ -63,155 +113,124 @@ function calculateNormalizedData(data: AssetEntry[], selectedAssets: string[]) {
   return data.map((entry) => {
     const newEntry: { [key: string]: number | string } = { date: entry.date };
     selectedAssets.forEach((asset) => {
-      const value = entry[asset] as number;
+      const value = entry[asset];
+      if (typeof value !== 'number') return;
       const { min, max } = minMaxMap[asset];
-      if (max === min) {
-        newEntry[asset] = 0; // 변동 없는 경우
-      } else {
-        newEntry[asset] = ((value - min) / (max - min)) * 200 - 100;
-      }
+      newEntry[asset] = max === min ? 0 : ((value - min) / (max - min)) * 200 - 100;
+      newEntry[`${asset}_original`] = value;
     });
     return newEntry;
   });
 }
 
+function downsampleData(data: AssetEntry[], scale: 'daily' | 'weekly' | 'monthly') {
+  if (scale === 'daily') return data;
+
+  const result: AssetEntry[] = [];
+  let buffer: AssetEntry[] = [];
+  let lastKey = '';
+
+  const getGroupKey = (dateStr: string) => {
+    const date = new Date(dateStr);
+    if (scale === 'weekly') {
+      const week = Math.floor((date.getDate() + date.getDay()) / 7);
+      return `${date.getFullYear()}-W${week}`;
+    }
+    return dateStr.slice(0, 7);
+  };
+
+  const pushGroup = () => {
+    if (!buffer.length) return;
+    const agg: AssetEntry = { date: buffer[buffer.length - 1].date };
+    const keys = Object.keys(buffer[0]).filter(k => k !== 'date');
+    for (const key of keys) {
+      const vals = buffer.map(row => row[key] as number).filter(v => typeof v === 'number');
+      agg[key] = vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : 0;
+    }
+    result.push(agg);
+    buffer = [];
+  };
+
+  for (const row of data) {
+    const groupKey = getGroupKey(row.date as string);
+    if (groupKey !== lastKey && buffer.length) pushGroup();
+    buffer.push(row);
+    lastKey = groupKey;
+  }
+  pushGroup();
+
+  return result;
+}
+
 export default function AssetChart() {
   const [selectedAssets, setSelectedAssets] = useState(["S&P 500"]);
-  const [scale, setScale] = useState<'daily' | 'weekly' | 'monthly'>('monthly');
-  const [rawData, setRawData] = useState(generateMockData(scale));
-  const [viewRange, setViewRange] = useState([0, 36]);
+  const [scale, setScale] = useState<'daily' | 'weekly' | 'monthly'>('daily');
+  const [rawData, setRawData] = useState<AssetEntry[]>([]);
+  const [viewRange, setViewRange] = useState([0, 90]);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const isDragging = useRef(false);
   const dragStartX = useRef(0);
 
-  const touchStartX = useRef(0);
-  const pinchStartDist = useRef(0);
-  const touchMode = useRef<'drag' | 'pinch' | null>(null);
-
-  useEffect(() => {
-    const newData = generateMockData(scale);
-    setRawData(newData);
-    setViewRange([0, scale === 'daily' ? 90 : scale === 'weekly' ? 52 : 36]);
-  }, [scale]);
-
-  const data = calculateNormalizedData(rawData.slice(viewRange[0], viewRange[1]), selectedAssets);
-
-  const toggleAsset = (asset: string) => {
-    setSelectedAssets((prev) =>
-      prev.includes(asset) ? prev.filter((a) => a !== asset) : [...prev, asset]
-    );
-  };
-
   const handleWheel = (e: WheelEvent) => {
     e.preventDefault();
     const delta = Math.sign(e.deltaY);
-    const rangeSize = viewRange[1] - viewRange[0];
-    let newSize = delta > 0 ? rangeSize + 6 : rangeSize - 6;
-    newSize = Math.max(6, Math.min(rawData.length, newSize));
+    const size = viewRange[1] - viewRange[0];
+    let newSize = Math.max(6, size + (delta > 0 ? 6 : -6));
     const mid = Math.floor((viewRange[0] + viewRange[1]) / 2);
-    let newStart = Math.max(0, mid - Math.floor(newSize / 2));
-    let newEnd = Math.min(rawData.length, newStart + newSize);
-    if (newEnd - newStart < newSize) {
-      newStart = Math.max(0, newEnd - newSize);
-    }
-    setViewRange([newStart, newEnd]);
-  };
-
-  const handleMouseDown = (e: MouseEvent) => {
-    isDragging.current = true;
-    dragStartX.current = e.clientX;
-    document.body.style.userSelect = 'none';
-  };
-
-  const handleMouseUp = () => {
-    isDragging.current = false;
-    document.body.style.userSelect = '';
+    let start = Math.max(0, mid - Math.floor(newSize / 2));
+    let end = start + newSize;
+    setViewRange([start, end]);
   };
 
   const handleMouseMove = (e: MouseEvent) => {
     if (!isDragging.current) return;
-    const deltaX = e.clientX - dragStartX.current;
-    if (Math.abs(deltaX) < 10) return;
-    const offset = Math.round(deltaX / 10);
+    const offset = Math.round((e.clientX - dragStartX.current) / 10);
     let newStart = Math.max(0, viewRange[0] - offset);
     let newEnd = Math.min(rawData.length, viewRange[1] - offset);
-    if (newEnd - newStart === viewRange[1] - viewRange[0]) {
-      setViewRange([newStart, newEnd]);
-    }
+    setViewRange([newStart, newEnd]);
     dragStartX.current = e.clientX;
   };
 
-  const handleTouchStart = (e: TouchEvent) => {
-    if (e.touches.length === 1) {
-      touchMode.current = 'drag';
-      touchStartX.current = e.touches[0].clientX;
-    } else if (e.touches.length === 2) {
-      touchMode.current = 'pinch';
-      const dx = e.touches[0].clientX - e.touches[1].clientX;
-      pinchStartDist.current = Math.abs(dx);
-    }
-  };
+  useEffect(() => {
+    const fetchData = async () => {
+      const data = await fetchAssetDataReal(selectedAssets);
+      setRawData(data);
+    };
+    fetchData();
+  }, [selectedAssets]);
 
-  const handleTouchMove = (e: TouchEvent) => {
-    if (touchMode.current === 'drag' && e.touches.length === 1) {
-      const deltaX = e.touches[0].clientX - touchStartX.current;
-      if (Math.abs(deltaX) < 10) return;
-      const offset = Math.round(deltaX / 10);
-      let newStart = Math.max(0, viewRange[0] - offset);
-      let newEnd = Math.min(rawData.length, viewRange[1] - offset);
-      if (newEnd - newStart === viewRange[1] - viewRange[0]) {
-        setViewRange([newStart, newEnd]);
-      }
-      touchStartX.current = e.touches[0].clientX;
-    } else if (touchMode.current === 'pinch' && e.touches.length === 2) {
-      const dx = e.touches[0].clientX - e.touches[1].clientX;
-      const pinchDist = Math.abs(dx);
-      const delta = pinchDist - pinchStartDist.current;
-      const rangeSize = viewRange[1] - viewRange[0];
-      let newSize = delta < 0 ? rangeSize + 6 : rangeSize - 6;
-      newSize = Math.max(6, Math.min(rawData.length, newSize));
-      const mid = Math.floor((viewRange[0] + viewRange[1]) / 2);
-      let newStart = Math.max(0, mid - Math.floor(newSize / 2));
-      let newEnd = Math.min(rawData.length, newStart + newSize);
-      if (newEnd - newStart < newSize) {
-        newStart = Math.max(0, newEnd - newSize);
-      }
-      setViewRange([newStart, newEnd]);
-      pinchStartDist.current = pinchDist;
-    }
-  };
-
-  const handleTouchEnd = () => {
-    touchMode.current = null;
-  };
+  useEffect(() => {
+    const scaled = downsampleData(rawData, scale);
+    const length = scale === 'monthly' ? 7 : scale === 'weekly' ? 52 : 90;
+    const total = scaled.length;
+    setViewRange([Math.max(0, total - length), total]);
+  }, [scale, rawData]);
 
   useEffect(() => {
     const ref = containerRef.current;
     if (ref) {
       ref.addEventListener('wheel', handleWheel, { passive: false });
-      ref.addEventListener('mousedown', handleMouseDown);
-      ref.addEventListener('mouseup', handleMouseUp);
-      ref.addEventListener('mouseleave', handleMouseUp);
       ref.addEventListener('mousemove', handleMouseMove);
-
-      ref.addEventListener('touchstart', handleTouchStart, { passive: false });
-      ref.addEventListener('touchmove', handleTouchMove, { passive: false });
-      ref.addEventListener('touchend', handleTouchEnd);
-
-      return () => {
-        ref.removeEventListener('wheel', handleWheel);
-        ref.removeEventListener('mousedown', handleMouseDown);
-        ref.removeEventListener('mouseup', handleMouseUp);
-        ref.removeEventListener('mouseleave', handleMouseUp);
-        ref.removeEventListener('mousemove', handleMouseMove);
-
-        ref.removeEventListener('touchstart', handleTouchStart);
-        ref.removeEventListener('touchmove', handleTouchMove);
-        ref.removeEventListener('touchend', handleTouchEnd);
-      };
+      ref.addEventListener('mousedown', (e) => {
+        isDragging.current = true;
+        dragStartX.current = e.clientX;
+        document.body.style.userSelect = 'none';
+      });
+      ref.addEventListener('mouseup', () => {
+        isDragging.current = false;
+        document.body.style.userSelect = '';
+      });
     }
+    return () => {
+      ref?.removeEventListener('wheel', handleWheel);
+      ref?.removeEventListener('mousemove', handleMouseMove);
+    };
   }, [viewRange]);
+
+  const scaled = downsampleData(rawData, scale);
+  const sliced = scaled.slice(viewRange[0], viewRange[1]);
+  const data = calculateNormalizedData(sliced, selectedAssets);
 
   return (
     <div
@@ -223,7 +242,11 @@ export default function AssetChart() {
         {Object.keys(assetColors).map((asset) => (
           <button
             key={asset}
-            onClick={() => toggleAsset(asset)}
+            onClick={() =>
+              setSelectedAssets(prev =>
+                prev.includes(asset) ? prev.filter(a => a !== asset) : [...prev, asset]
+              )
+            }
             className={`px-3 py-1 border rounded text-sm ${
               selectedAssets.includes(asset)
                 ? 'bg-blue-600 text-white'
@@ -237,9 +260,22 @@ export default function AssetChart() {
       <ResponsiveContainer width="100%" height={300}>
         <LineChart data={data}>
           <CartesianGrid strokeDasharray="3 3" />
-          <XAxis dataKey="date" />
+          <XAxis
+            dataKey="date"
+            tickFormatter={(value) => {
+              if (scale === 'monthly') return value.slice(0, 7);
+              if (scale === 'weekly') return value.replace('-W', '주 ');
+              return value;
+            }}
+          />
           <YAxis domain={[-100, 100]} tickFormatter={(v) => `${v.toFixed(0)}%`} />
-          <Tooltip formatter={(value) => `${(value as number).toFixed(2)}%`} />
+          <Tooltip
+            formatter={(v: any, name: string, props: any) => {
+              const original = props.payload[`${name}_original`];
+              const percent = (v as number).toFixed(2);
+              return [`${percent}% (원: ${original?.toFixed?.(2) ?? 'N/A'})`, name];
+            }}
+          />
           <Legend />
           {selectedAssets.map((asset) => (
             <Line
@@ -257,7 +293,7 @@ export default function AssetChart() {
         {['daily', 'weekly', 'monthly'].map((type) => (
           <button
             key={type}
-            onClick={() => setScale(type as 'daily' | 'weekly' | 'monthly')}
+            onClick={() => setScale(type as any)}
             className={`px-3 py-1 border rounded text-sm ${
               scale === type ? 'bg-gray-300 text-black' : 'bg-white text-gray-700'
             }`}
@@ -265,6 +301,12 @@ export default function AssetChart() {
             {type === 'daily' ? '일' : type === 'weekly' ? '주' : '월'}
           </button>
         ))}
+        <button
+          onClick={exportCacheToCSV}
+          className="px-3 py-1 border rounded text-sm bg-green-500 text-white"
+        >
+          Raw Data 다운로드
+        </button>
       </div>
     </div>
   );

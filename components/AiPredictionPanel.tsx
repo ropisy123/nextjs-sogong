@@ -4,14 +4,14 @@ import { useState } from 'react';
 import Image from 'next/image';
 
 const assets = [
-  "금리",
-  "부동산",
   "S&P 500",
   "Kospi",
   "Bitcoin",
   "국채",
   "원-달러 환율",
   "금",
+  "부동산",
+  "금리",
 ];
 
 const models = ["ChatGPT", "Gemini Pro", "LLaMA 3"];

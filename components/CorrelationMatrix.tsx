@@ -12,14 +12,14 @@ import {
 } from 'recharts';
 
 const assetList = [
-  "금리",
-  "부동산",
   "S&P 500",
   "Kospi",
   "Bitcoin",
   "국채",
   "원-달러 환율",
   "금",
+  "부동산",
+  "금리",
 ];
 
 const generateMockCorrelationData = (scale: 'daily' | 'weekly' | 'monthly') => {
@@ -193,7 +193,7 @@ export default function CorrelationTrendChart() {
           <select
             value={assetA}
             onChange={(e) => setAssetA(e.target.value)}
-            className="border p-2 rounded w-full"
+            className="border p-2 rounded w-full text-black"
           >
             {assetList.map((asset) => (
               <option key={asset} value={asset}>
@@ -207,7 +207,7 @@ export default function CorrelationTrendChart() {
           <select
             value={assetB}
             onChange={(e) => setAssetB(e.target.value)}
-            className="border p-2 rounded w-full"
+            className="border p-2 rounded w-full text-black"
           >
             {assetList.map((asset) => (
               <option key={asset} value={asset}>

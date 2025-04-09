@@ -10,14 +10,17 @@
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.49.4",
-    "next": "15.2.4",
+    "file-saver": "^2.0.5",
+    "next": "^15.2.4",
     "openai": "^4.91.1",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "recharts": "^2.15.2"
+    "recharts": "^2.15.2",
+    "yahoo-finance2": "^2.13.3"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
+    "@types/file-saver": "^2.0.7",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
