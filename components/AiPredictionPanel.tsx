@@ -52,39 +52,29 @@ export default function AiPredictionPanel() {
         </tbody>
         <tbody>
           <tr>
-            <td className="border border-gray-300 px-2 py-1">S&P 500</td>
-            <td className="border border-gray-300 px-2 py-1">30%</td>
-            <td className="border border-gray-300 px-2 py-1">미국 금리 인하 기대와 견조한 실적 기반의 성장 기대 종목 집중</td>
+            <td className="border border-gray-300 px-2 py-1">주식</td>
+            <td className="border border-gray-300 px-2 py-1">35%</td>
+            <td className="border border-gray-300 px-2 py-1">중기 수익을 위한 핵심 자산. 손실 제한 조건에 맞춰 변동성이 낮은 우량주 및 방어형 섹터 위주로 구성</td>
           </tr>
           <tr>
-            <td className="border border-gray-300 px-2 py-1">KOSPI</td>
-            <td className="border border-gray-300 px-2 py-1">15%</td>
-            <td className="border border-gray-300 px-2 py-1">반도체·수출 회복에 따른 저평가 매력과 외국인 수급 기대</td>
-          </tr>
-          <tr>
-            <td className="border border-gray-300 px-2 py-1">Bitcoin</td>
-            <td className="border border-gray-300 px-2 py-1">10%</td>
-            <td className="border border-gray-300 px-2 py-1">반감기 이후 장기 상승 기대 있으나 높은 변동성 감안한 제한적 비중</td>
+            <td className="border border-gray-300 px-2 py-1">부동산</td>
+            <td className="border border-gray-300 px-2 py-1">25%</td>
+            <td className="border border-gray-300 px-2 py-1">인플레이션 방어와 실물 자산으로서의 가치 보존 효과. 3년 이상 보유 시 자산 안정성 기대 가능</td>
           </tr>
           <tr>
             <td className="border border-gray-300 px-2 py-1">금</td>
-            <td className="border border-gray-300 px-2 py-1">15%</td>
-            <td className="border border-gray-300 px-2 py-1">금리 하락과 인플레 리스크에 대한 헤지 수단으로서 안정적 역할</td>
+            <td className="border border-gray-300 px-2 py-1">20%</td>
+            <td className="border border-gray-300 px-2 py-1">대표적 안전자산으로 시장 불안정 시 하방 방어 역할. 자산 포트폴리오의 균형을 위한 핵심 요소</td>
           </tr>
           <tr>
-            <td className="border border-gray-300 px-2 py-1">부동산(한국)</td>
-            <td className="border border-gray-300 px-2 py-1">15%</td>
-            <td className="border border-gray-300 px-2 py-1">금리 인하 가능성 있으나 실수요 회복 지연으로 중립적 대응 필요</td>
+            <td className="border border-gray-300 px-2 py-1">Bitcoin</td>
+            <td className="border border-gray-300 px-2 py-1">5% 이하</td>
+            <td className="border border-gray-300 px-2 py-1">수익 잠재력은 크지만 변동성이 매우 높음. 손실 제한 조건에 맞춰 소액 분산 투자 권장</td>
           </tr>
           <tr>
-            <td className="border border-gray-300 px-2 py-1">미국 금리</td>
+            <td className="border border-gray-300 px-2 py-1">현금성 자산</td>
             <td className="border border-gray-300 px-2 py-1">15%</td>
-            <td className="border border-gray-300 px-2 py-1">금리 하락 시 미국채 및 관련 자산 수익성 개선 가능성</td>
-          </tr>
-          <tr>
-            <td className="border border-gray-300 px-2 py-1">한국 금리</td>
-            <td className="border border-gray-300 px-2 py-1">15%</td>
-            <td className="border border-gray-300 px-2 py-1">완만한 금리 인하 경로에 따른 국내채·현금성 자산 활용 고려</td>
+            <td className="border border-gray-300 px-2 py-1">시장 급락, 긴급 대응 또는 매수 타이밍 확보용. 유동성 유지 및 심리적 안정에도 기여</td>
           </tr>
         </tbody>
       </table>`.trim();
