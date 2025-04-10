@@ -10,7 +10,8 @@ const assetSymbolMap: Record<string, string> = {
   "국채": "^TNX",
   "원-달러 환율": "KRW=X",
   "부동산": "VNQ",
-  "금리": "^IRX",
+  "미국금리": "^IRX",       // 미국 단기금리
+  "한국금리": "KRWCBDKY=SB" // 한국 콜금리
 };
 
 export async function POST(req: NextRequest) {

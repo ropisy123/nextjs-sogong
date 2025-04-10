@@ -17,7 +17,8 @@ const assetList = [
   "Bitcoin",
   "금",
   "부동산",
-  "금리",
+  "한국금리",
+  "미국금리",
 ];
 
 const generateMockCorrelationData = (scale: 'daily' | 'weekly' | 'monthly') => {
@@ -30,7 +31,7 @@ const generateMockCorrelationData = (scale: 'daily' | 'weekly' | 'monthly') => {
 };
 
 export default function CorrelationTrendChart() {
-  const [assetA, setAssetA] = useState("금리");
+  const [assetA, setAssetA] = useState("Kospi");
   const [assetB, setAssetB] = useState("S&P 500");
   const [scale, setScale] = useState<'daily' | 'weekly' | 'monthly'>('monthly');
   const [data, setData] = useState(generateMockCorrelationData(scale));

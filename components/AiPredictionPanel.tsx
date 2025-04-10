@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import Image from 'next/image';
 
 const assets = [
-  "S&P 500", "Kospi", "Bitcoin", "금", "부동산", "금리",
+  "S&P 500", "Kospi", "Bitcoin", "금", "부동산", "미국금리", "한국금리",
 ];
 
 const models = ["ChatGPT", "Gemini Pro", "LLaMA 3"];
@@ -25,7 +25,6 @@ export default function AiPredictionPanel() {
     { model: string; rise: number; stay: number; fall: number }[]
   >([]);
 
-  // 랜덤 예측값 생성 (클라이언트에서만 실행되도록)
   useEffect(() => {
     const generated = models.map((model) => {
       const rise = getRandom();
@@ -41,53 +40,71 @@ export default function AiPredictionPanel() {
     setPredictions(generated);
   }, [selectedAsset]);
 
-  // 요약 생성 API 호출
-/*  
-  const fetchLLMSummary = async (period: string, lossRate: string) => {
-    try {
-      const res = await fetch('/api/llm-summary', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ investmentPeriod: period, maxLossRate: lossRate }),
-      });
-      const data = await res.json();
-      return data.summary || '요약 없음';
-    } catch (err) {
-      console.error('❌ 요약 요청 오류:', err);
-      return 'LLM 요약 요청 실패';
-    }
-  };
-*/
   const fetchLLMSummary = async (period: string, lossRate: string): Promise<string> => {
-    // 테스트용 더미 요약
     const mockSummary = `
-  📈 예측 요약 (${period}, 손실 허용률: ${lossRate})
-
-  - 채권: 금리 하락 가능성으로 완만한 상승 📈
-  - 금: 인플레이션 완화에 따라 횡보 예상 ⚖️
-  - 나스닥: 기술주 중심으로 반등 기대 📊
-  - 미국 대형 가치주: 배당주 중심으로 안정적 흐름 👍
-  - 비트코인: 단기 고점 형성 후 조정 가능성 🚨
-  - 서울 부동산: 금리 부담 지속으로 약보합세 📉
-    `.trim();
-
-    // 실제 API 요청은 일시적으로 막음
+      <table className="w-full border border-gray-300 border-collapse text-sm text-black">
+        <tbody>
+          <tr>
+            <th class="...">자산군</th>
+            <th class="...">권장 비중 (%)</th>
+            <th class="...">선정 이유</th>
+          </tr>
+        </tbody>
+        <tbody>
+          <tr>
+            <td className="border border-gray-300 px-2 py-1">S&P 500</td>
+            <td className="border border-gray-300 px-2 py-1">30%</td>
+            <td className="border border-gray-300 px-2 py-1">미국 금리 인하 기대와 견조한 실적 기반의 성장 기대 종목 집중</td>
+          </tr>
+          <tr>
+            <td className="border border-gray-300 px-2 py-1">KOSPI</td>
+            <td className="border border-gray-300 px-2 py-1">15%</td>
+            <td className="border border-gray-300 px-2 py-1">반도체·수출 회복에 따른 저평가 매력과 외국인 수급 기대</td>
+          </tr>
+          <tr>
+            <td className="border border-gray-300 px-2 py-1">Bitcoin</td>
+            <td className="border border-gray-300 px-2 py-1">10%</td>
+            <td className="border border-gray-300 px-2 py-1">반감기 이후 장기 상승 기대 있으나 높은 변동성 감안한 제한적 비중</td>
+          </tr>
+          <tr>
+            <td className="border border-gray-300 px-2 py-1">금</td>
+            <td className="border border-gray-300 px-2 py-1">15%</td>
+            <td className="border border-gray-300 px-2 py-1">금리 하락과 인플레 리스크에 대한 헤지 수단으로서 안정적 역할</td>
+          </tr>
+          <tr>
+            <td className="border border-gray-300 px-2 py-1">부동산(한국)</td>
+            <td className="border border-gray-300 px-2 py-1">15%</td>
+            <td className="border border-gray-300 px-2 py-1">금리 인하 가능성 있으나 실수요 회복 지연으로 중립적 대응 필요</td>
+          </tr>
+          <tr>
+            <td className="border border-gray-300 px-2 py-1">미국 금리</td>
+            <td className="border border-gray-300 px-2 py-1">15%</td>
+            <td className="border border-gray-300 px-2 py-1">금리 하락 시 미국채 및 관련 자산 수익성 개선 가능성</td>
+          </tr>
+          <tr>
+            <td className="border border-gray-300 px-2 py-1">한국 금리</td>
+            <td className="border border-gray-300 px-2 py-1">15%</td>
+            <td className="border border-gray-300 px-2 py-1">완만한 금리 인하 경로에 따른 국내채·현금성 자산 활용 고려</td>
+          </tr>
+        </tbody>
+      </table>`.trim();
+    // 실제 API 호출을 대체하는 mock 데이터입니다.  
     return new Promise((resolve) => {
-      setTimeout(() => resolve(mockSummary), 500); // 가짜 지연
+      setTimeout(() => resolve(mockSummary), 500);
     });
   };
-  // 투자 조건이 바뀔 때 요약 요청
+
   useEffect(() => {
     const fetchSummary = async () => {
       setSummaryText('⏳ 요약 생성 중...');
       const summary = await fetchLLMSummary(investmentPeriod, maxLossRate);
-      setSummaryText(summary);
+      setSummaryText(summary.trim()); // 🔥 여기에서 trim() 적용
     };
     fetchSummary();
   }, [investmentPeriod, maxLossRate]);
 
   return (
-    <div className="bg-white p-4 rounded shadow">
+    <div className="bg-white p-4 rounded">
       <h2 className="text-xl font-semibold mb-2 text-black">AI 예측 결과</h2>
 
       {/* 자산 선택 */}
@@ -107,7 +124,7 @@ export default function AiPredictionPanel() {
         ))}
       </div>
 
-      {/* ChatGPT 예측 게이지 */}
+      {/* 예측 막대 영역 */}
       <div className="grid grid-cols-1 gap-4">
         {predictions
           .filter(({ model }) => model === "ChatGPT")
@@ -122,7 +139,7 @@ export default function AiPredictionPanel() {
                 자산: <strong>{selectedAsset}</strong>
               </div>
 
-              <div className="relative h-6 bg-gray-200 rounded-full overflow-hidden">
+              <div className="relative h-6 bg-gray-200 rounded-full overflow-hidden w-full">
                 <div
                   className="absolute top-0 bottom-0 left-0 bg-green-500 transition-all duration-700"
                   style={{ width: `${rise}%` }}
@@ -139,44 +156,54 @@ export default function AiPredictionPanel() {
           ))}
       </div>
 
-      {/* 투자 조건 선택: 투자 기간 + 손실 허용률 */}
-      <div className="mt-6 flex flex-wrap items-center gap-6">
-        {/* 투자 기간 */}
-        <div className="flex items-center gap-2">
-          <h4 className="text-black font-medium whitespace-nowrap">📆 투자 기간</h4>
-          <select
-            value={investmentPeriod}
-            onChange={(e) => setInvestmentPeriod(e.target.value)}
-            className="px-3 py-1 border rounded text-sm bg-white text-black"
-          >
-            <option value="1년">1년</option>
-            <option value="3년">3년</option>
-            <option value="5년">5년</option>
-            <option value="10년">10년</option>
-          </select>
+      {/* 아래쪽: 투자 조건 + 요약 */}
+      <div className="mt-6 space-y-4">
+        <div className="flex flex-wrap items-center gap-6">
+          {/* 투자 기간 */}
+          <div className="flex items-center gap-2">
+            <h4 className="text-black font-medium whitespace-nowrap">📆 투자 기간</h4>
+            <select
+              value={investmentPeriod}
+              onChange={(e) => setInvestmentPeriod(e.target.value)}
+              className="px-3 py-1 border rounded text-sm bg-white text-black"
+            >
+              <option value="1년">1년</option>
+              <option value="3년">3년</option>
+              <option value="5년">5년</option>
+              <option value="10년">10년</option>
+            </select>
+          </div>
+
+          {/* 손실 허용률 */}
+          <div className="flex items-center gap-2">
+            <h4 className="text-black font-medium whitespace-nowrap">📉 최대 손실 허용률</h4>
+            <select
+              value={maxLossRate}
+              onChange={(e) => setMaxLossRate(e.target.value)}
+              className="px-3 py-1 border rounded text-sm bg-white text-black"
+            >
+              <option value="5%">5%</option>
+              <option value="10%">10%</option>
+              <option value="20%">20%</option>
+            </select>
+          </div>
         </div>
 
-        {/* 손실 허용률 */}
-        <div className="flex items-center gap-2">
-          <h4 className="text-black font-medium whitespace-nowrap">📉 최대 손실 허용률</h4>
-          <select
-            value={maxLossRate}
-            onChange={(e) => setMaxLossRate(e.target.value)}
-            className="px-3 py-1 border rounded text-sm bg-white text-black"
-          >
-            <option value="5%">5%</option>
-            <option value="10%">10%</option>
-            <option value="20%">20%</option>
-          </select>
-        </div>
+        {/* 요약 출력 */}
+        {summaryText && (
+          <div
+            className="text-sm leading-relaxed text-black"
+            dangerouslySetInnerHTML={{
+              __html: summaryText
+                .trim() // 🔥 여기에서도 trim()
+                .replace(/<table/g, '<table class="w-full border border-gray-300 border-collapse text-black"')
+                .replace(/<th/g, '<th class="border border-gray-300 px-2 py-1 bg-gray-100 text-left text-black"')
+                .replace(/<td/g, '<td class="border border-gray-300 px-2 py-1 text-left text-black"')
+            }}
+          />
+        )}
       </div>
-
-      {/* 요약 출력 */}
-      {summaryText && (
-        <div className="mt-6 p-4 border rounded bg-black text-white whitespace-pre-wrap text-sm leading-relaxed">
-          {summaryText}
-        </div>
-      )}
     </div>
+
   );
 }

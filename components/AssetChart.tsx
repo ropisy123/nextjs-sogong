@@ -18,7 +18,8 @@ const assetColors = {
   "Bitcoin": '#EF4444',
   "금": '#FFD700',
   "부동산": '#F97316',
-  "금리": '#0EA5E9',
+  "미국금리": '#0EA5E9',
+  "한국금리": '#3B82F6',
 };
 
 type AssetEntry = {
@@ -100,7 +101,7 @@ function calculateNormalizedData(data: AssetEntry[], selectedAssets: string[]) {
   const minMaxMap: Record<string, { min: number; max: number }> = {};
 
   selectedAssets.forEach((asset) => {
-    if (asset === "금리") return; // 금리는 정규화하지 않음
+    if (asset === "미국금리" || asset === "한국금리") return; // 금리는 아래에서 따로 처리
     const values = data
       .map((entry) => entry[asset])
       .filter((v): v is number => typeof v === 'number');
@@ -117,8 +118,11 @@ function calculateNormalizedData(data: AssetEntry[], selectedAssets: string[]) {
 
       newEntry[`${asset}_original`] = value;
 
-      if (asset === "금리") {
-        newEntry[asset] = value; // 금리는 정규화하지 않고 원래 값
+      if (asset === "미국금리" || asset === "한국금리") {
+        const min = -10;
+        const max = 30;
+        newEntry[`${asset}_original`] = value;
+        newEntry[asset] = ((value - min) / (max - min)) * 40 - 10;
       } else {
         const { min, max } = minMaxMap[asset];
         newEntry[asset] = max === min ? 0 : ((value - min) / (max - min)) * 100;
@@ -289,27 +293,21 @@ export default function AssetChart() {
             tickFormatter={(v) => `${v.toFixed(0)}%`}
           />
           {/* 오른쪽 Y축 - 금리 (원래 값) */}
-          {selectedAssets.includes("금리") && (
+          {selectedAssets.some(a => a === "미국금리" || a === "한국금리") && (
             <YAxis
               yAxisId="right"
               orientation="right"
-              tickFormatter={(v) => v.toFixed(2)}
-              domain={() => {
-                const values = data
-                  .map(d => d["금리"])
-                  .filter((v): v is number => typeof v === 'number');
-                const min = Math.min(...values);
-                const max = Math.max(...values);
-                return [min, max];
-              }}
+              tickFormatter={(v) => `${v.toFixed(0)}%`}
+              domain={[-10, 30]} // 고정된 정규화 범위
             />
           )}
           <Tooltip
             formatter={(v: any, name: string, props: any) => {
               const original = props.payload[`${name}_original`];
+              const isRate = name === "미국금리" || name === "한국금리";
               return [
-                name === "금리"
-                  ? `${original?.toFixed?.(2) ?? 'N/A'}`
+                isRate
+                  ? `${(v as number).toFixed(2)}% (원: ${original?.toFixed?.(2) ?? 'N/A'})`
                   : `${(v as number).toFixed(2)}% (원: ${original?.toFixed?.(2) ?? 'N/A'})`,
                 name,
               ];
@@ -324,7 +322,7 @@ export default function AssetChart() {
               stroke={assetColors[asset as keyof typeof assetColors]}
               strokeWidth={2}
               dot={false}
-              yAxisId={asset === "금리" ? "right" : "left"}
+              yAxisId={["미국금리", "한국금리"].includes(asset) ? "right" : "left"}
             />
           ))}
         </LineChart>
