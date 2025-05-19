@@ -29,59 +29,67 @@ type AssetEntry = {
 
 const cache: Record<string, AssetEntry[]> = {};
 
-function exportCacheToCSV() {
+function exportCacheToCSV(selectedAssets: string[]) {
   const allDates = new Set<string>();
-  Object.values(cache).flat().forEach((row) => allDates.add(row.date));
+  selectedAssets.forEach(asset => {
+    (cache[asset] || []).forEach(row => allDates.add(row.date));
+  });
   const sortedDates = Array.from(allDates).sort();
 
-  const allAssets = Object.keys(cache);
-  const rows = [['date', ...allAssets].join(',')];
+  const rows = [['date', ...selectedAssets].join(',')];
 
   for (const date of sortedDates) {
     const row = [date];
-    for (const asset of allAssets) {
-      const found = cache[asset].find(d => d.date === date);
+    for (const asset of selectedAssets) {
+      const found = cache[asset]?.find(d => d.date === date);
       row.push(found ? String(found[asset]) : '');
     }
     rows.push(row.join(','));
   }
 
   const blob = new Blob([rows.join('\n')], { type: 'text/csv;charset=utf-8' });
-  saveAs(blob, 'asset_cache.csv');
+  saveAs(blob, 'selected_asset_data.csv');
 }
 
 async function fetchAssetDataReal(assets: string[]): Promise<AssetEntry[]> {
-  const missing = assets.filter(asset => !cache[asset]);
-  if (missing.length) {
-    const res = await fetch('/api/asset-data', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ assets: missing }),
-    });
-    const newData: AssetEntry[] = await res.json();
-    newData.forEach((row) => {
-      for (const asset of missing) {
-        if (row[asset] !== undefined) {
-          if (!cache[asset]) cache[asset] = [];
-          cache[asset].push({ date: row.date, [asset]: row[asset] });
-        }
-      }
-    });
-  }
+  const assetMap: Record<string, string> = {
+    "S&P 500": "sp500",
+    "Kospi": "kospi",
+    "Bitcoin": "bitcoin",
+    "금": "gold",
+    "미국금리": "us-interest",
+    "한국금리": "kr-interest",
+    "부동산": "real-estate",
+  };
 
   const allDates = new Set<string>();
-  assets.forEach(asset => {
-    (cache[asset] || []).forEach(row => allDates.add(row.date));
-  });
+  let mergedMap = new Map<string, AssetEntry>();
+  let lastValues: Record<string, number> = {};
+
+  for (const asset of assets) {
+    if (!cache[asset]) {
+      const res = await fetch(`http://43.201.105.71:8000/data/${assetMap[asset]}`);
+      const json: { date: string; value: number }[] = await res.json();
+
+      // FastAPI가 반환한 JSON을 cache에 변환해서 저장
+      cache[asset] = json.map(d => {
+        const row: AssetEntry = { date: d.date };
+        row[asset] = typeof d.value === 'number' ? d.value : 0;
+        return row;
+      });
+    }
+
+    for (const entry of cache[asset]) {
+      allDates.add(entry.date);
+    }
+  }
 
   const sortedDates = Array.from(allDates).sort();
-  const mergedMap = new Map<string, AssetEntry>();
-  let lastValues: Record<string, number> = {};
 
   for (const date of sortedDates) {
     const row: AssetEntry = { date };
     for (const asset of assets) {
-      const entry = cache[asset]?.find(d => d.date === date);
+      const entry = cache[asset].find(d => d.date === date);
       if (entry && typeof entry[asset] === 'number') {
         row[asset] = entry[asset];
         lastValues[asset] = entry[asset] as number;
@@ -182,7 +190,8 @@ export default function AssetChart() {
   const isDragging = useRef(false);
   const dragStartX = useRef(0);
 
-
+  const getRangeSize = (s: typeof scale) =>
+    s === 'monthly' ? 7 : s === 'weekly' ? 52 : 90;
 
   const handleWheel = (e: WheelEvent) => {
     e.preventDefault();
@@ -208,22 +217,22 @@ export default function AssetChart() {
     const fetchData = async () => {
       const data = await fetchAssetDataReal(selectedAssets);
       setRawData(data);
+      const size = getRangeSize(scale);
+      const total = data.length;
+      setViewRange([Math.max(0, total - size), total]);
     };
     fetchData();
   }, [selectedAssets]);
 
   useEffect(() => {
     const scaled = downsampleData(rawData, scale);
-    const length = scale === 'monthly' ? 7 : scale === 'weekly' ? 52 : 90;
+    const size = getRangeSize(scale);
     const total = scaled.length;
-  
-    // 최초 로딩이거나 scale이 바뀔 때만 viewRange 초기화
-    if (isInitial.current || viewRange[1] > total || viewRange[1] - viewRange[0] < 6) {
-      setViewRange([Math.max(0, total - length), total]);
-    }
-  
-    isInitial.current = false;
-  }, [scale, rawData]);
+    const newEnd = total;
+    const newStart = Math.max(0, newEnd - size);
+    setViewRange([newStart, newEnd]);
+  }, [scale]);
+
   
   useEffect(() => {
     const ref = containerRef.current;
@@ -339,14 +348,14 @@ export default function AssetChart() {
             {type === 'daily' ? '일' : type === 'weekly' ? '주' : '월'}
           </button>
         ))}
-{/*}
-        <button
-          onClick={exportCacheToCSV}
-          className="px-3 py-1 border rounded text-sm bg-green-500 text-white"
-        >
-          Raw Data 다운로드
-        </button>
-*/}      
+       {
+          <button
+            onClick={() => exportCacheToCSV(selectedAssets)}
+            className="px-3 py-1 border rounded text-sm bg-green-500 text-white"
+          >
+            Raw Data 다운로드
+          </button>
+      }      
       </div>
     </div>
   );
