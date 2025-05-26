@@ -306,11 +306,13 @@ export default function AssetChart() {
             {type === 'daily' ? '일' : type === 'weekly' ? '주' : '월'}
           </button>
         ))}
+        /*
         <button
           onClick={() => exportCacheToCSV(selectedAssets)}
           className="px-3 py-1 border rounded text-sm bg-green-500 text-white"
         >
           Raw Data 다운로드
+        */
         </button>
       </div>
     </div>

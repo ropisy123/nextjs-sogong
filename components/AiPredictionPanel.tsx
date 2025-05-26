@@ -14,7 +14,29 @@ const modelImages: Record<string, string> = {
   "LLaMA 3": "/logo_llama.png",
 };
 
-const getRandom = () => Math.floor(Math.random() * 100);
+const assetCodeMap: Record<string, string> = {
+  "S&P 500": "sp500",
+  "Kospi": "kospi",
+  "Bitcoin": "bitcoin",
+  "금": "gold",
+  "부동산": "kr_real_estate",
+  "미국금리": "us_interest",
+  "한국금리": "kr_interest"
+};
+
+// ✅ FastAPI 호출 함수
+const fetchAiForecast = async (asset: string): Promise<{
+  rise_probability_percent: number;
+  fall_probability_percent: number;
+  neutral_probability_percent: number;
+  expected_value_percent: number;
+}> => {
+  const assetCode = assetCodeMap[asset] || asset;  // 백엔드에 맞는 코드로 매핑
+  const query = new URLSearchParams({ asset: assetCode }).toString();
+  const response = await fetch(`https://3.37.88.22/ai-probability-forecast?${query}`);
+  if (!response.ok) throw new Error("API 호출 실패");
+  return response.json();
+};
 
 export default function AiPredictionPanel() {
   const [selectedAsset, setSelectedAsset] = useState("S&P 500");
@@ -22,74 +44,90 @@ export default function AiPredictionPanel() {
   const [maxLossRate, setMaxLossRate] = useState("10%");
   const [summaryText, setSummaryText] = useState<string>('요약을 불러오는 중...');
   const [predictions, setPredictions] = useState<
-    { model: string; rise: number; stay: number; fall: number }[]
+    { model: string; rise: number; stay: number; fall: number; expected_value_percent: number }[]
   >([]);
 
+  // ✅ 예측값 로드
   useEffect(() => {
-    const generated = models.map((model) => {
-      const rise = getRandom();
-      const fall = getRandom();
-      const stay = Math.max(0, 100 - rise - fall);
-      return {
-        model,
-        rise: Math.max(0, Math.min(rise, 100)),
-        stay,
-        fall: Math.max(0, Math.min(fall, 100)),
-      };
-    });
-    setPredictions(generated);
+    const loadForecast = async () => {
+      try {
+        const data = await fetchAiForecast(selectedAsset);
+        const {
+          rise_probability_percent,
+          fall_probability_percent,
+          neutral_probability_percent,
+          expected_value_percent, // ✅ 추가
+        } = data;
+
+        const updated = models.map((model) => ({
+          model,
+          rise: rise_probability_percent,
+          stay: neutral_probability_percent,
+          fall: fall_probability_percent,
+          expected_value_percent, // ✅ 추가
+        }));
+
+        setPredictions(updated);
+      } catch (err) {
+        console.error("AI 예측 데이터 로딩 실패:", err);
+      }
+    };
+
+    loadForecast();
   }, [selectedAsset]);
 
   const fetchLLMSummary = async (period: string, lossRate: string): Promise<string> => {
-    const mockSummary = `
-      <table className="w-full border border-gray-300 border-collapse text-sm text-black">
+    const query = new URLSearchParams({
+      duration: period,
+      tolerance: lossRate,
+    }).toString();
+
+    const response = await fetch(`https://3.37.88.22/ai-contextual-advices?${query}`);
+    if (!response.ok) throw new Error("요약 데이터 불러오기 실패");
+
+    const data: {
+      asset_name: string;
+      weight: number;
+      reason: string;
+    }[] = await response.json();
+
+    // ✅ 복수 자산 테이블 행 생성
+    const rows = data.map((entry) => `
+      <tr>
+        <td>${entry.asset_name}</td>
+        <td>${entry.weight}</td>
+        <td>${entry.reason}</td>
+      </tr>
+    `).join("");
+
+    return `
+      <table>
+        <thead>
+          <tr>
+            <th>자산</th>
+            <th>비중 (%)</th>
+            <th>요약 설명</th>
+          </tr>
+        </thead>
         <tbody>
-          <tr>
-            <th class="...">자산군</th>
-            <th class="...">권장 비중 (%)</th>
-            <th class="...">선정 이유</th>
-          </tr>
+          ${rows}
         </tbody>
-        <tbody>
-          <tr>
-            <td className="border border-gray-300 px-2 py-1">주식</td>
-            <td className="border border-gray-300 px-2 py-1">35%</td>
-            <td className="border border-gray-300 px-2 py-1">중기 수익을 위한 핵심 자산. 손실 제한 조건에 맞춰 변동성이 낮은 우량주 및 방어형 섹터 위주로 구성</td>
-          </tr>
-          <tr>
-            <td className="border border-gray-300 px-2 py-1">부동산</td>
-            <td className="border border-gray-300 px-2 py-1">25%</td>
-            <td className="border border-gray-300 px-2 py-1">인플레이션 방어와 실물 자산으로서의 가치 보존 효과. 3년 이상 보유 시 자산 안정성 기대 가능</td>
-          </tr>
-          <tr>
-            <td className="border border-gray-300 px-2 py-1">금</td>
-            <td className="border border-gray-300 px-2 py-1">20%</td>
-            <td className="border border-gray-300 px-2 py-1">대표적 안전자산으로 시장 불안정 시 하방 방어 역할. 자산 포트폴리오의 균형을 위한 핵심 요소</td>
-          </tr>
-          <tr>
-            <td className="border border-gray-300 px-2 py-1">Bitcoin</td>
-            <td className="border border-gray-300 px-2 py-1">5% 이하</td>
-            <td className="border border-gray-300 px-2 py-1">수익 잠재력은 크지만 변동성이 매우 높음. 손실 제한 조건에 맞춰 소액 분산 투자 권장</td>
-          </tr>
-          <tr>
-            <td className="border border-gray-300 px-2 py-1">현금성 자산</td>
-            <td className="border border-gray-300 px-2 py-1">15%</td>
-            <td className="border border-gray-300 px-2 py-1">시장 급락, 긴급 대응 또는 매수 타이밍 확보용. 유동성 유지 및 심리적 안정에도 기여</td>
-          </tr>
-        </tbody>
-      </table>`.trim();
-    // 실제 API 호출을 대체하는 mock 데이터입니다.  
-    return new Promise((resolve) => {
-      setTimeout(() => resolve(mockSummary), 500);
-    });
+      </table>
+    `;
   };
 
   useEffect(() => {
     const fetchSummary = async () => {
       setSummaryText('⏳ 요약 생성 중...');
-      const summary = await fetchLLMSummary(investmentPeriod, maxLossRate);
-      setSummaryText(summary.trim()); // 🔥 여기에서 trim() 적용
+      try {
+        const summary = await fetchLLMSummary(investmentPeriod, maxLossRate);
+        setSummaryText(summary.trim());
+      } catch (error) {
+        console.error("요약 요청 실패:", error);
+        setSummaryText("❌ 요약을 불러오는 데 실패했습니다.");
+      }
     };
+
     fetchSummary();
   }, [investmentPeriod, maxLossRate]);
 
@@ -118,7 +156,7 @@ export default function AiPredictionPanel() {
       <div className="grid grid-cols-1 gap-4">
         {predictions
           .filter(({ model }) => model === "ChatGPT")
-          .map(({ model, rise }) => (
+          .map(({ model, rise, stay, fall, expected_value_percent }) => (
             <div key={model} className="p-4 border rounded bg-gray-50 shadow-sm">
               <h3 className="text-center font-semibold mb-4 flex items-center justify-center gap-2 text-black">
                 <Image src={modelImages[model]} alt={model} width={24} height={24} />
@@ -129,15 +167,17 @@ export default function AiPredictionPanel() {
                 자산: <strong>{selectedAsset}</strong>
               </div>
 
-              <div className="relative h-6 bg-gray-200 rounded-full overflow-hidden w-full">
+              <div className="relative h-6 rounded-full w-full bg-gray-100 overflow-hidden">
+                {/* ✅ 초록색: 기대치 왼쪽 채우기 */}
                 <div
-                  className="absolute top-0 bottom-0 left-0 bg-green-500 transition-all duration-700"
-                  style={{ width: `${rise}%` }}
-                  title={`상승 확률: ${rise}%`}
+                  className="absolute top-0 bottom-0 bg-green-300"
+                  style={{
+                    width: `${(expected_value_percent + 100) / 2}%`,
+                  }}
                 />
               </div>
-
-              <div className="flex justify-between mt-1 text-xs text-gray-600">
+              {/* ✅ 하단 라벨 */}
+              <div className="flex justify-between text-xs text-gray-600 mt-1 px-1">
                 <span>하락</span>
                 <span>보합</span>
                 <span>상승</span>
@@ -185,7 +225,7 @@ export default function AiPredictionPanel() {
             className="text-sm leading-relaxed text-black"
             dangerouslySetInnerHTML={{
               __html: summaryText
-                .trim() // 🔥 여기에서도 trim()
+                .trim()
                 .replace(/<table/g, '<table class="w-full border border-gray-300 border-collapse text-black"')
                 .replace(/<th/g, '<th class="border border-gray-300 px-2 py-1 bg-gray-100 text-left text-black"')
                 .replace(/<td/g, '<td class="border border-gray-300 px-2 py-1 text-left text-black"')
@@ -194,6 +234,5 @@ export default function AiPredictionPanel() {
         )}
       </div>
     </div>
-
   );
 }
