@@ -68,7 +68,7 @@ async function fetchAssetDataReal(assets: string[], scale = "daily"): Promise<As
   queryParams.append("resolution", scale);
 
   try {
-    const res = await fetch(`https://3.37.88.22:8000/chart?${queryParams.toString()}`);
+    const res = await fetch(`https://3.37.88.22/chart?${queryParams.toString()}`);
     if (!res.ok) throw new Error(`HTTP error ${res.status}`);
     const json = await res.json();
     if (!Array.isArray(json)) throw new Error("Invalid chart response");
