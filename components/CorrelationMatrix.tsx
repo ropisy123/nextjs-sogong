@@ -56,7 +56,7 @@ function CorrelationTrendChart() {
 
       try {
         const res = await fetch(
-          `http://3.37.88.22:8000/correlation?asset1=${assetKeyA}&asset2=${assetKeyB}&period=${scale}`
+          `https://3.37.88.22:8000/correlation?asset1=${assetKeyA}&asset2=${assetKeyB}&period=${scale}`
         );
         if (!res.ok) throw new Error(`HTTP error ${res.status}`);
         const json = await res.json();
