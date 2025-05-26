@@ -35,7 +35,6 @@ function exportCacheToCSV(selectedAssets: string[]) {
     (cache[asset] || []).forEach(row => allDates.add(row.date));
   });
   const sortedDates = Array.from(allDates).sort();
-
   const rows = [['date', ...selectedAssets].join(',')];
 
   for (const date of sortedDates) {
@@ -51,56 +50,48 @@ function exportCacheToCSV(selectedAssets: string[]) {
   saveAs(blob, 'selected_asset_data.csv');
 }
 
-async function fetchAssetDataReal(assets: string[]): Promise<AssetEntry[]> {
+async function fetchAssetDataReal(assets: string[], scale = "daily"): Promise<AssetEntry[]> {
   const assetMap: Record<string, string> = {
     "S&P 500": "sp500",
     "Kospi": "kospi",
     "Bitcoin": "bitcoin",
     "금": "gold",
-    "미국금리": "us-interest",
-    "한국금리": "kr-interest",
-    "부동산": "real-estate",
+    "미국금리": "us_interest",
+    "한국금리": "kr_interest",
+    "부동산": "real_estate",
   };
 
-  const allDates = new Set<string>();
-  let mergedMap = new Map<string, AssetEntry>();
-  let lastValues: Record<string, number> = {};
-
+  const queryParams = new URLSearchParams();
   for (const asset of assets) {
-    if (!cache[asset]) {
-      const res = await fetch(`http://43.201.105.71:8000/data/${assetMap[asset]}`);
-      const json: { date: string; value: number }[] = await res.json();
-
-      // FastAPI가 반환한 JSON을 cache에 변환해서 저장
-      cache[asset] = json.map(d => {
-        const row: AssetEntry = { date: d.date };
-        row[asset] = typeof d.value === 'number' ? d.value : 0;
-        return row;
-      });
-    }
-
-    for (const entry of cache[asset]) {
-      allDates.add(entry.date);
-    }
+    queryParams.append("assets", assetMap[asset]);
   }
+  queryParams.append("resolution", scale);
 
-  const sortedDates = Array.from(allDates).sort();
+  try {
+    const res = await fetch(`http://3.37.88.22:8000/chart?${queryParams.toString()}`);
+    if (!res.ok) throw new Error(`HTTP error ${res.status}`);
+    const json = await res.json();
+    if (!Array.isArray(json)) throw new Error("Invalid chart response");
 
-  for (const date of sortedDates) {
-    const row: AssetEntry = { date };
-    for (const asset of assets) {
-      const entry = cache[asset].find(d => d.date === date);
-      if (entry && typeof entry[asset] === 'number') {
-        row[asset] = entry[asset];
-        lastValues[asset] = entry[asset] as number;
-      } else if (lastValues[asset] !== undefined) {
-        row[asset] = lastValues[asset];
+    const result: AssetEntry[] = [];
+    for (const row of json) {
+      const newRow: AssetEntry = { date: row.date };
+      for (const asset of assets) {
+        const key = assetMap[asset];
+        newRow[asset] = row[key] ?? undefined;
       }
+      result.push(newRow);
     }
-    mergedMap.set(date, row);
-  }
 
-  return Array.from(mergedMap.values());
+    for (const asset of assets) {
+      cache[asset] = result.map(r => ({ date: r.date, [asset]: r[asset] }));
+    }
+
+    return result;
+  } catch (err) {
+    console.error("Failed to fetch chart data:", err);
+    return [];
+  }
 }
 
 function calculateNormalizedData(data: AssetEntry[], selectedAssets: string[]) {
@@ -109,7 +100,7 @@ function calculateNormalizedData(data: AssetEntry[], selectedAssets: string[]) {
   const minMaxMap: Record<string, { min: number; max: number }> = {};
 
   selectedAssets.forEach((asset) => {
-    if (asset === "미국금리" || asset === "한국금리") return; // 금리는 아래에서 따로 처리
+    if (asset === "미국금리" || asset === "한국금리") return;
     const values = data
       .map((entry) => entry[asset])
       .filter((v): v is number => typeof v === 'number');
@@ -129,7 +120,6 @@ function calculateNormalizedData(data: AssetEntry[], selectedAssets: string[]) {
       if (asset === "미국금리" || asset === "한국금리") {
         const min = -10;
         const max = 30;
-        newEntry[`${asset}_original`] = value;
         newEntry[asset] = ((value - min) / (max - min)) * 40 - 10;
       } else {
         const { min, max } = minMaxMap[asset];
@@ -184,7 +174,6 @@ export default function AssetChart() {
   const [scale, setScale] = useState<'daily' | 'weekly' | 'monthly'>('daily');
   const [rawData, setRawData] = useState<AssetEntry[]>([]);
   const [viewRange, setViewRange] = useState<[number, number]>([0, 90]);
-  const isInitial = useRef(true);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const isDragging = useRef(false);
@@ -200,40 +189,36 @@ export default function AssetChart() {
     let newSize = Math.max(6, size + (delta > 0 ? 6 : -6));
     const mid = Math.floor((viewRange[0] + viewRange[1]) / 2);
     let start = Math.max(0, mid - Math.floor(newSize / 2));
-    let end = start + newSize;
+    let end = Math.min(rawData.length, start + newSize);
     setViewRange([start, end]);
   };
 
   const handleMouseMove = (e: MouseEvent) => {
     if (!isDragging.current) return;
-    const offset = Math.round((e.clientX - dragStartX.current) / 10);
+    const deltaX = e.clientX - dragStartX.current;
+    if (Math.abs(deltaX) < 10) return;
+    const offset = Math.round(deltaX / 10);
     let newStart = Math.max(0, viewRange[0] - offset);
-    let newEnd = Math.min(rawData.length, viewRange[1] - offset);
+    let newEnd = newStart + (viewRange[1] - viewRange[0]);
+    if (newEnd > rawData.length) {
+      newEnd = rawData.length;
+      newStart = Math.max(0, newEnd - (viewRange[1] - viewRange[0]));
+    }
     setViewRange([newStart, newEnd]);
     dragStartX.current = e.clientX;
   };
 
   useEffect(() => {
     const fetchData = async () => {
-      const data = await fetchAssetDataReal(selectedAssets);
+      const data = await fetchAssetDataReal(selectedAssets, scale);
       setRawData(data);
       const size = getRangeSize(scale);
       const total = data.length;
       setViewRange([Math.max(0, total - size), total]);
     };
     fetchData();
-  }, [selectedAssets]);
+  }, [selectedAssets, scale]);
 
-  useEffect(() => {
-    const scaled = downsampleData(rawData, scale);
-    const size = getRangeSize(scale);
-    const total = scaled.length;
-    const newEnd = total;
-    const newStart = Math.max(0, newEnd - size);
-    setViewRange([newStart, newEnd]);
-  }, [scale]);
-
-  
   useEffect(() => {
     const ref = containerRef.current;
     if (ref) {
@@ -260,10 +245,7 @@ export default function AssetChart() {
   const data = calculateNormalizedData(sliced, selectedAssets);
 
   return (
-    <div
-      ref={containerRef}
-      className="bg-white p-4 rounded shadow cursor-grab select-none relative"
-    >
+    <div ref={containerRef} className="bg-white p-4 rounded shadow cursor-grab select-none relative">
       <h2 className="text-xl font-semibold mb-2 text-black">자산 변동 싸이클</h2>
       <div className="mb-3 flex flex-wrap gap-2">
         {Object.keys(assetColors).map((asset) => (
@@ -287,39 +269,15 @@ export default function AssetChart() {
       <ResponsiveContainer width="100%" height={300}>
         <LineChart data={data}>
           <CartesianGrid strokeDasharray="3 3" />
-          <XAxis
-            dataKey="date"
-            tickFormatter={(value) => {
-              if (scale === 'monthly') return value.slice(0, 7);
-              if (scale === 'weekly') return value.replace('-W', '주 ');
-              return value;
-            }}
-          />
-          {/* 왼쪽 Y축 - 정규화된 자산 */}
-          <YAxis
-            yAxisId="left"
-            domain={[0, 100]}
-            tickFormatter={(v) => `${v.toFixed(0)}%`}
-          />
-          {/* 오른쪽 Y축 - 금리 (원래 값) */}
+          <XAxis dataKey="date" />
+          <YAxis yAxisId="left" domain={[0, 100]} tickFormatter={(v) => `${v.toFixed(0)}%`} />
           {selectedAssets.some(a => a === "미국금리" || a === "한국금리") && (
-            <YAxis
-              yAxisId="right"
-              orientation="right"
-              tickFormatter={(v) => `${v.toFixed(0)}%`}
-              domain={[-10, 30]} // 고정된 정규화 범위
-            />
+            <YAxis yAxisId="right" orientation="right" domain={[-10, 30]} tickFormatter={(v) => `${v.toFixed(0)}%`} />
           )}
           <Tooltip
             formatter={(v: any, name: string, props: any) => {
               const original = props.payload[`${name}_original`];
-              const isRate = name === "미국금리" || name === "한국금리";
-              return [
-                isRate
-                  ? `${(v as number).toFixed(2)}% (원: ${original?.toFixed?.(2) ?? 'N/A'})`
-                  : `${(v as number).toFixed(2)}% (원: ${original?.toFixed?.(2) ?? 'N/A'})`,
-                name,
-              ];
+              return [`${v.toFixed?.(2)}% (원: ${original?.toFixed?.(2) ?? 'N/A'})`, name];
             }}
           />
           <Legend />
@@ -340,7 +298,7 @@ export default function AssetChart() {
         {['daily', 'weekly', 'monthly'].map((type) => (
           <button
             key={type}
-            onClick={() => setScale(type as any)}
+            onClick={() => setScale(type as 'daily' | 'weekly' | 'monthly')}
             className={`px-3 py-1 border rounded text-sm ${
               scale === type ? 'bg-gray-300 text-black' : 'bg-white text-gray-700'
             }`}
@@ -348,14 +306,12 @@ export default function AssetChart() {
             {type === 'daily' ? '일' : type === 'weekly' ? '주' : '월'}
           </button>
         ))}
-       {
-          <button
-            onClick={() => exportCacheToCSV(selectedAssets)}
-            className="px-3 py-1 border rounded text-sm bg-green-500 text-white"
-          >
-            Raw Data 다운로드
-          </button>
-      }      
+        <button
+          onClick={() => exportCacheToCSV(selectedAssets)}
+          className="px-3 py-1 border rounded text-sm bg-green-500 text-white"
+        >
+          Raw Data 다운로드
+        </button>
       </div>
     </div>
   );
