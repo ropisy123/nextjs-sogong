@@ -33,7 +33,7 @@ const fetchAiForecast = async (asset: string): Promise<{
 }> => {
   const assetCode = assetCodeMap[asset] || asset;  // 백엔드에 맞는 코드로 매핑
   const query = new URLSearchParams({ asset: assetCode }).toString();
-  const response = await fetch(`https://3.37.88.22/ai-probability-forecast?${query}`);
+  const response = await fetch(`http://3.37.88.22:7777/ai-probability-forecast?${query}`);
   if (!response.ok) throw new Error("API 호출 실패");
   return response.json();
 };
@@ -82,7 +82,7 @@ export default function AiPredictionPanel() {
       tolerance: lossRate,
     }).toString();
 
-    const response = await fetch(`https://3.37.88.22/ai-contextual-advices?${query}`);
+    const response = await fetch(`http://3.37.88.22:7777/ai-contextual-advices?${query}`);
     if (!response.ok) throw new Error("요약 데이터 불러오기 실패");
 
     const data: {

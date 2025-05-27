@@ -22,6 +22,16 @@ const assetColors = {
   "한국금리": '#3B82F6',
 };
 
+const assetUnits: Record<string, string> = {
+  "S&P 500": "pt",
+  "Kospi": "pt",
+  "Bitcoin": "BTC",
+  "금": "USD",
+  "부동산": "백만원",
+  "미국금리": "%",
+  "한국금리": "%",
+};
+
 type AssetEntry = {
   date: string;
   [key: string]: number | string;
@@ -68,7 +78,7 @@ async function fetchAssetDataReal(assets: string[], scale = "daily"): Promise<As
   queryParams.append("resolution", scale);
 
   try {
-    const res = await fetch(`https://3.37.88.22/chart?${queryParams.toString()}`);
+    const res = await fetch(`http://3.37.88.22:7777/chart?${queryParams.toString()}`);
     if (!res.ok) throw new Error(`HTTP error ${res.status}`);
     const json = await res.json();
     if (!Array.isArray(json)) throw new Error("Invalid chart response");
@@ -277,7 +287,9 @@ export default function AssetChart() {
           <Tooltip
             formatter={(v: any, name: string, props: any) => {
               const original = props.payload[`${name}_original`];
-              return [`${v.toFixed?.(2)}% (원: ${original?.toFixed?.(2) ?? 'N/A'})`, name];
+              const unit = assetUnits[name] ?? '';
+              const originalText = typeof original === 'number' ? `${original.toFixed(2)} ${unit}` : 'N/A';
+              return [`${v.toFixed?.(2)}% (실제값: ${originalText})`, name];
             }}
           />
           <Legend />
@@ -306,14 +318,6 @@ export default function AssetChart() {
             {type === 'daily' ? '일' : type === 'weekly' ? '주' : '월'}
           </button>
         ))}
-        /*
-        <button
-          onClick={() => exportCacheToCSV(selectedAssets)}
-          className="px-3 py-1 border rounded text-sm bg-green-500 text-white"
-        >
-          Raw Data 다운로드
-        */
-        </button>
       </div>
     </div>
   );
