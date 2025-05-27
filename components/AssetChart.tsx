@@ -78,7 +78,7 @@ async function fetchAssetDataReal(assets: string[], scale = "daily"): Promise<As
   queryParams.append("resolution", scale);
 
   try {
-    const res = await fetch(`http://3.37.88.22:7777/chart?${queryParams.toString()}`);
+    const res = await fetch(`https://sogong.site/chart?${queryParams.toString()}`);
     if (!res.ok) throw new Error(`HTTP error ${res.status}`);
     const json = await res.json();
     if (!Array.isArray(json)) throw new Error("Invalid chart response");
