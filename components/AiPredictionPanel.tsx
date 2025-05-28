@@ -12,6 +12,7 @@ const modelImages: Record<string, string> = {
   ChatGPT: "/logo_chatgpt.png",
   "Gemini Pro": "/logo_gemini.png",
   "LLaMA 3": "/logo_llama.png",
+  "Deepseek": "/logo_llama.png",
 };
 
 const assetCodeMap: Record<string, string> = {
