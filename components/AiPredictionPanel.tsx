@@ -19,23 +19,34 @@ const assetCodeMap: Record<string, string> = {
   "Kospi": "kospi",
   "Bitcoin": "bitcoin",
   "금": "gold",
-  "부동산": "kr_real_estate",
+  "부동산": "real_estate",
   "미국금리": "us_interest",
   "한국금리": "kr_interest"
 };
 
 // ✅ FastAPI 호출 함수
 const fetchAiForecast = async (asset: string): Promise<{
-  rise_probability_percent: number;
-  fall_probability_percent: number;
-  neutral_probability_percent: number;
-  expected_value_percent: number;
+  rise: number;
+  fall: number;
+  stay: number;
+  expected_value: number;
 }> => {
-  const assetCode = assetCodeMap[asset] || asset;  // 백엔드에 맞는 코드로 매핑
+  const assetCode = assetCodeMap[asset] || asset;
   const query = new URLSearchParams({ asset: assetCode }).toString();
-  const response = await fetch(`https://sogong.site/ai-probability-forecast?${query}`);
+  const response = await fetch(`https://sogong.site/ai-forecast?${query}`);
   if (!response.ok) throw new Error("API 호출 실패");
-  return response.json();
+
+  const data = await response.json();
+
+  return {
+    //rise: data.bullish * 100,   // 0.6 → 60%
+    //stay: data.neutral * 100,
+    //fall: data.bearish * 100,
+    rise: (data.bullish * -100) + (data.neutral * 0) + (data.bearish * 100) + 100,
+    stay: 0,
+    fall: 0,
+    expected_value: data.expected_value,
+  };
 };
 
 export default function AiPredictionPanel() {
@@ -52,19 +63,18 @@ export default function AiPredictionPanel() {
     const loadForecast = async () => {
       try {
         const data = await fetchAiForecast(selectedAsset);
-        const {
-          rise_probability_percent,
-          fall_probability_percent,
-          neutral_probability_percent,
-          expected_value_percent, // ✅ 추가
-        } = data;
+
+        const rise = data.rise;
+        const stay = data.stay;
+        const fall = data.fall;
+        const expected_value_percent = data.expected_value;
 
         const updated = models.map((model) => ({
           model,
-          rise: rise_probability_percent,
-          stay: neutral_probability_percent,
-          fall: fall_probability_percent,
-          expected_value_percent, // ✅ 추가
+          rise,
+          stay,
+          fall,
+          expected_value_percent,
         }));
 
         setPredictions(updated);
@@ -77,44 +87,41 @@ export default function AiPredictionPanel() {
   }, [selectedAsset]);
 
   const fetchLLMSummary = async (period: string, lossRate: string): Promise<string> => {
-    const query = new URLSearchParams({
-      duration: period,
-      tolerance: lossRate,
-    }).toString();
+  const query = new URLSearchParams({
+    duration: period,
+    tolerance: lossRate,
+  }).toString();
 
-    const response = await fetch(`https://sogong.site/ai-contextual-advices?${query}`);
-    if (!response.ok) throw new Error("요약 데이터 불러오기 실패");
+  const response = await fetch(`https://sogong.site/ai-portfolio-advice?${query}`);
+  if (!response.ok) throw new Error("요약 데이터 불러오기 실패");
 
-    const data: {
-      asset_name: string;
-      weight: number;
-      reason: string;
-    }[] = await response.json();
+  const data: {
+    asset_name: string;
+    allocation_ratio: number;
+    rationale: string;
+  }[] = await response.json();
 
-    // ✅ 복수 자산 테이블 행 생성
-    const rows = data.map((entry) => `
+  const rows = data.map((entry) => `
+    <tr>
+      <td>${entry.asset_name}</td>
+      <td>${entry.allocation_ratio}%</td>
+      <td>${entry.rationale}</td>
+    </tr>
+  `).join("");
+
+  return `
+    <table>
       <tr>
-        <td>${entry.asset_name}</td>
-        <td>${entry.weight}</td>
-        <td>${entry.reason}</td>
+        <th>자산</th>
+        <th>비중 (%)</th>
+        <th>요약 설명</th>
       </tr>
-    `).join("");
-
-    return `
-      <table>
-        <thead>
-          <tr>
-            <th>자산</th>
-            <th>비중 (%)</th>
-            <th>요약 설명</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${rows}
-        </tbody>
-      </table>
-    `;
-  };
+      <tbody>
+        ${rows}
+      </tbody>
+    </table>
+  `;
+};
 
   useEffect(() => {
     const fetchSummary = async () => {
@@ -168,11 +175,37 @@ export default function AiPredictionPanel() {
               </div>
 
               <div className="relative h-6 rounded-full w-full bg-gray-100 overflow-hidden">
-                {/* ✅ 초록색: 기대치 왼쪽 채우기 */}
+                {/* ✅ 하락 (연한 파랑) */}
                 <div
-                  className="absolute top-0 bottom-0 bg-green-300"
+                  className="absolute top-0 bottom-0 left-0 z-10"
                   style={{
-                    width: `${(expected_value_percent + 100) / 2}%`,
+                    width: `${fall}%`,
+                    //minWidth: "1px",
+                    minWidth: "0px",
+                    //backgroundColor: '#93c5fd',
+                    backgroundColor:'#4ade80',
+                  }}
+                />
+                {/* ✅ 보합 (회색) */}
+                <div
+                  className="absolute top-0 bottom-0 z-20"
+                  style={{
+                    left: `${fall}%`,
+                    width: `${stay}%`,
+                    //minWidth: "1px",
+                    minWidth: "0px",
+                    backgroundColor: '#d1d5db',
+                  }}
+                />
+                {/* ✅ 상승 (연한 빨강) */}
+                <div
+                  className="absolute top-0 bottom-0 z-30"
+                  style={{
+                    left: `${fall + stay}%`,
+                    width: `${rise}%`,
+                    //minWidth: "1px",
+                    minWidth: "0px",
+                    backgroundColor: '#4ade80',
                   }}
                 />
               </div>
