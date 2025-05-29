@@ -123,31 +123,36 @@ function CorrelationTrendChart() {
 
   const handleTouchStart = (e: TouchEvent) => {
     if (e.touches.length === 1) {
-      touchStartRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
-      lastViewRange.current = [...viewRange];
+      isDragging.current = true;
+      touchStartX.current = e.touches[0].clientX;
     } else if (e.touches.length === 2) {
-      lastTouchDistance.current = getDistance(e.touches);
+      lastTouchDistance.current = getTouchDistance(e.touches);
     }
   };
 
   const handleTouchMove = (e: TouchEvent) => {
-    if (e.touches.length === 1 && touchStartRef.current) {
-      const deltaX = e.touches[0].clientX - touchStartRef.current.x;
+    e.preventDefault(); // 📛 브라우저 확대 방지
+    if (e.touches.length === 1 && isDragging.current) {
+      const deltaX = e.touches[0].clientX - touchStartX.current;
       const offset = Math.round(deltaX / 10);
-      let newStart = Math.max(0, lastViewRange.current[0] - offset);
-      let newEnd = Math.min(data.length, newStart + (viewRange[1] - viewRange[0]));
+      let newStart = Math.max(0, viewRange[0] - offset);
+      let newEnd = newStart + (viewRange[1] - viewRange[0]);
+      if (newEnd > rawData.length) {
+        newEnd = rawData.length;
+        newStart = Math.max(0, newEnd - (viewRange[1] - viewRange[0]));
+      }
       setViewRange([newStart, newEnd]);
-    } else if (e.touches.length === 2 && lastTouchDistance.current !== null) {
-      const newDistance = getDistance(e.touches);
-      const scaleChange = newDistance - lastTouchDistance.current;
-      const rangeSize = viewRange[1] - viewRange[0];
-      let newSize = scaleChange > 0 ? rangeSize - 6 : rangeSize + 6;
-      newSize = Math.max(6, Math.min(data.length, newSize));
+      touchStartX.current = e.touches[0].clientX;
+    } else if (e.touches.length === 2 && lastTouchDistance.current != null) {
+      const newDist = getTouchDistance(e.touches);
+      const delta = newDist - lastTouchDistance.current;
+      const size = viewRange[1] - viewRange[0];
+      let newSize = Math.max(6, Math.min(rawData.length, size - Math.round(delta / 5)));
       const mid = Math.floor((viewRange[0] + viewRange[1]) / 2);
-      let newStart = Math.max(0, mid - Math.floor(newSize / 2));
-      let newEnd = Math.min(data.length, newStart + newSize);
-      setViewRange([newStart, newEnd]);
-      lastTouchDistance.current = newDistance;
+      let start = Math.max(0, mid - Math.floor(newSize / 2));
+      let end = Math.min(rawData.length, start + newSize);
+      setViewRange([start, end]);
+      lastTouchDistance.current = newDist;
     }
   };
 
