@@ -206,7 +206,7 @@ export default function AssetChart() {
     e.preventDefault();
     const delta = Math.sign(e.deltaY);
     const size = viewRange[1] - viewRange[0];
-    let newSize = Math.max(6, size + (delta > 0 ? 6 : -6));
+    let newSize = Math.max(6, size + (delta > 0 ? 20 : -20));
     const mid = Math.floor((viewRange[0] + viewRange[1]) / 2);
     let start = Math.max(0, mid - Math.floor(newSize / 2));
     let end = Math.min(rawData.length, start + newSize);
@@ -217,7 +217,7 @@ export default function AssetChart() {
     if (!isDragging.current) return;
     const deltaX = e.clientX - dragStartX.current;
     if (Math.abs(deltaX) < 10) return;
-    const offset = Math.round(deltaX / 10);
+    const offset = Math.round(deltaX / 4);
     let newStart = Math.max(0, viewRange[0] - offset);
     let newEnd = newStart + (viewRange[1] - viewRange[0]);
     if (newEnd > rawData.length) {
@@ -238,9 +238,10 @@ export default function AssetChart() {
   };
 
   const handleTouchMove = (e: TouchEvent) => {
+    e.preventDefault();  
     if (e.touches.length === 1 && touchStartRef.current) {
       const deltaX = e.touches[0].clientX - touchStartRef.current.x;
-      const offset = Math.round(deltaX / 10);
+      const offset = Math.round(deltaX / 4);
       let newStart = Math.max(0, lastViewRange.current[0] - offset);
       let newEnd = Math.min(rawData.length, newStart + (viewRange[1] - viewRange[0]));
       setViewRange([newStart, newEnd]);
@@ -248,7 +249,7 @@ export default function AssetChart() {
       const newDistance = getDistance(e.touches);
       const scaleChange = newDistance - lastTouchDistance.current;
       const rangeSize = viewRange[1] - viewRange[0];
-      let newSize = scaleChange > 0 ? rangeSize - 6 : rangeSize + 6;
+      let newSize = scaleChange > 0 ? rangeSize - 20 : rangeSize + 20;
       newSize = Math.max(6, Math.min(rawData.length, newSize));
       const mid = Math.floor((viewRange[0] + viewRange[1]) / 2);
       let newStart = Math.max(0, mid - Math.floor(newSize / 2));
