@@ -353,20 +353,12 @@ export default function AssetChart() {
             <YAxis yAxisId="right" orientation="right" domain={[-10, 30]} tickFormatter={(v) => `${v.toFixed(0)}%`} />
           )}
           <Tooltip
-            isAnimationActive={false}
-            content={({ payload }) => {
-              if (isPinching || !payload?.length) return null;
-
-              return (
-                <div className="bg-white border px-2 py-1 text-xs text-black shadow">
-                  {payload.map((p, idx) => (
-                    <div key={idx}>
-                      <strong>{p.name}</strong>: {p.value?.toFixed(2)}%<br />
-                      (실제값: {p.payload[`${p.name}_original`]?.toFixed(2)} {assetUnits[p.name]})
-                    </div>
-                  ))}
-                </div>
-              );
+            cursor={false}
+            formatter={(v: any, name: string, props: any) => {
+              const original = props.payload[`${name}_original`];
+              const unit = assetUnits[name] ?? '';
+              const originalText = typeof original === 'number' ? `${original.toFixed(2)} ${unit}` : 'N/A';
+              return [`${v.toFixed?.(2)}% (실제값: ${originalText})`, name];
             }}
           />
           <Legend />
