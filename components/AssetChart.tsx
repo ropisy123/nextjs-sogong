@@ -188,9 +188,19 @@ export default function AssetChart() {
   const containerRef = useRef<HTMLDivElement>(null);
   const isDragging = useRef(false);
   const dragStartX = useRef(0);
+  const touchStartRef = useRef<{ x: number; y: number } | null>(null);
+  const lastTouchDistance = useRef<number | null>(null);
+  const lastViewRange = useRef<[number, number]>([0, 90]);
 
   const getRangeSize = (s: typeof scale) =>
     s === 'monthly' ? 7 : s === 'weekly' ? 52 : 90;
+
+  const getDistance = (touches: TouchList) => {
+    const [a, b] = touches;
+    const dx = a.clientX - b.clientX;
+    const dy = a.clientY - b.clientY;
+    return Math.sqrt(dx * dx + dy * dy);
+  };
 
   const handleWheel = (e: WheelEvent) => {
     e.preventDefault();
@@ -218,6 +228,41 @@ export default function AssetChart() {
     dragStartX.current = e.clientX;
   };
 
+  const handleTouchStart = (e: TouchEvent) => {
+    if (e.touches.length === 1) {
+      touchStartRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+      lastViewRange.current = [...viewRange];
+    } else if (e.touches.length === 2) {
+      lastTouchDistance.current = getDistance(e.touches);
+    }
+  };
+
+  const handleTouchMove = (e: TouchEvent) => {
+    if (e.touches.length === 1 && touchStartRef.current) {
+      const deltaX = e.touches[0].clientX - touchStartRef.current.x;
+      const offset = Math.round(deltaX / 10);
+      let newStart = Math.max(0, lastViewRange.current[0] - offset);
+      let newEnd = Math.min(rawData.length, newStart + (viewRange[1] - viewRange[0]));
+      setViewRange([newStart, newEnd]);
+    } else if (e.touches.length === 2 && lastTouchDistance.current !== null) {
+      const newDistance = getDistance(e.touches);
+      const scaleChange = newDistance - lastTouchDistance.current;
+      const rangeSize = viewRange[1] - viewRange[0];
+      let newSize = scaleChange > 0 ? rangeSize - 6 : rangeSize + 6;
+      newSize = Math.max(6, Math.min(rawData.length, newSize));
+      const mid = Math.floor((viewRange[0] + viewRange[1]) / 2);
+      let newStart = Math.max(0, mid - Math.floor(newSize / 2));
+      let newEnd = Math.min(rawData.length, newStart + newSize);
+      setViewRange([newStart, newEnd]);
+      lastTouchDistance.current = newDistance;
+    }
+  };
+
+  const handleTouchEnd = () => {
+    touchStartRef.current = null;
+    lastTouchDistance.current = null;
+  };
+
   useEffect(() => {
     const fetchData = async () => {
       const data = await fetchAssetDataReal(selectedAssets, scale);
@@ -243,77 +288,22 @@ export default function AssetChart() {
         isDragging.current = false;
         document.body.style.userSelect = '';
       });
+
+      // 👉 터치 이벤트 등록
+      ref.addEventListener('touchstart', handleTouchStart, { passive: false });
+      ref.addEventListener('touchmove', handleTouchMove, { passive: false });
+      ref.addEventListener('touchend', handleTouchEnd);
+      ref.addEventListener('mouseleave', handleTouchEnd);  // 드래그 유실 방지
     }
     return () => {
       ref?.removeEventListener('wheel', handleWheel);
       ref?.removeEventListener('mousemove', handleMouseMove);
+      ref?.removeEventListener('touchstart', handleTouchStart);
+      ref?.removeEventListener('touchmove', handleTouchMove);
+      ref?.removeEventListener('touchend', handleTouchEnd);
+      ref?.removeEventListener('mouseleave', handleTouchEnd);
     };
   }, [viewRange]);
-
-  useEffect(() => {
-    const ref = containerRef.current;
-    const touchStartX = { current: 0 };
-    const lastTouchDistance = { current: null as number | null };
-
-    const getTouchDistance = (touches: TouchList) => {
-      const [a, b] = touches;
-      const dx = a.clientX - b.clientX;
-      const dy = a.clientY - b.clientY;
-      return Math.sqrt(dx * dx + dy * dy);
-    };
-
-    const handleTouchStart = (e: TouchEvent) => {
-      if (e.touches.length === 1) {
-        isDragging.current = true;
-        touchStartX.current = e.touches[0].clientX;
-      } else if (e.touches.length === 2) {
-        lastTouchDistance.current = getTouchDistance(e.touches);
-      }
-    };
-
-    const handleTouchMove = (e: TouchEvent) => {
-      e.preventDefault(); // 📛 브라우저 확대 방지
-      if (e.touches.length === 1 && isDragging.current) {
-        const deltaX = e.touches[0].clientX - touchStartX.current;
-        const offset = Math.round(deltaX / 10);
-        let newStart = Math.max(0, viewRange[0] - offset);
-        let newEnd = newStart + (viewRange[1] - viewRange[0]);
-        if (newEnd > rawData.length) {
-          newEnd = rawData.length;
-          newStart = Math.max(0, newEnd - (viewRange[1] - viewRange[0]));
-        }
-        setViewRange([newStart, newEnd]);
-        touchStartX.current = e.touches[0].clientX;
-      } else if (e.touches.length === 2 && lastTouchDistance.current != null) {
-        const newDist = getTouchDistance(e.touches);
-        const delta = newDist - lastTouchDistance.current;
-        const size = viewRange[1] - viewRange[0];
-        let newSize = Math.max(6, Math.min(rawData.length, size - Math.round(delta / 5)));
-        const mid = Math.floor((viewRange[0] + viewRange[1]) / 2);
-        let start = Math.max(0, mid - Math.floor(newSize / 2));
-        let end = Math.min(rawData.length, start + newSize);
-        setViewRange([start, end]);
-        lastTouchDistance.current = newDist;
-      }
-    };
-
-    const handleTouchEnd = () => {
-      isDragging.current = false;
-      lastTouchDistance.current = null;
-    };
-
-    if (ref) {
-      ref.addEventListener("touchstart", handleTouchStart, { passive: false });
-      ref.addEventListener("touchmove", handleTouchMove, { passive: false });
-      ref.addEventListener("touchend", handleTouchEnd);
-    }
-
-    return () => {
-      ref?.removeEventListener("touchstart", handleTouchStart);
-      ref?.removeEventListener("touchmove", handleTouchMove);
-      ref?.removeEventListener("touchend", handleTouchEnd);
-    };
-  }, [viewRange, rawData]);
 
   const scaled = downsampleData(rawData, scale);
   const sliced = scaled.slice(viewRange[0], viewRange[1]);
