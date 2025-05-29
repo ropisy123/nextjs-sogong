@@ -184,7 +184,7 @@ export default function AssetChart() {
   const [scale, setScale] = useState<'daily' | 'weekly' | 'monthly'>('daily');
   const [rawData, setRawData] = useState<AssetEntry[]>([]);
   const [viewRange, setViewRange] = useState<[number, number]>([0, 90]);
-
+  const [isPinching, setIsPinching] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const isDragging = useRef(false);
   const dragStartX = useRef(0);
@@ -233,6 +233,7 @@ export default function AssetChart() {
       touchStartRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
       lastViewRange.current = [...viewRange];
     } else if (e.touches.length === 2) {
+      setIsPinching(true);
       lastTouchDistance.current = getDistance(e.touches);
     }
   };
@@ -259,11 +260,22 @@ export default function AssetChart() {
     }
   };
 
-  const handleTouchEnd = () => {
+  const handleTouchEnd = (e: TouchEvent) => {
+    setIsPinching(false);
     touchStartRef.current = null;
     lastTouchDistance.current = null;
   };
+  
+  const handleMouseDown = (e: MouseEvent) => {
+    isDragging.current = true;
+    dragStartX.current = e.clientX;
+    document.body.style.userSelect = 'none';
+  };
 
+  const handleMouseUp = () => {
+    isDragging.current = false;
+    document.body.style.userSelect = '';
+  };
   useEffect(() => {
     const fetchData = async () => {
       const data = await fetchAssetDataReal(selectedAssets, scale);
@@ -294,7 +306,7 @@ export default function AssetChart() {
       ref.addEventListener('touchstart', handleTouchStart, { passive: false });
       ref.addEventListener('touchmove', handleTouchMove, { passive: false });
       ref.addEventListener('touchend', handleTouchEnd);
-      ref.addEventListener('mouseleave', handleTouchEnd);  // 드래그 유실 방지
+      ref.addEventListener('mouseleave', handleMouseUp);  // 드래그 유실 방지
     }
     return () => {
       ref?.removeEventListener('wheel', handleWheel);
@@ -302,7 +314,7 @@ export default function AssetChart() {
       ref?.removeEventListener('touchstart', handleTouchStart);
       ref?.removeEventListener('touchmove', handleTouchMove);
       ref?.removeEventListener('touchend', handleTouchEnd);
-      ref?.removeEventListener('mouseleave', handleTouchEnd);
+      ref?.removeEventListener('mouseleave', handleMouseUp);
     };
   }, [viewRange]);
 
@@ -341,11 +353,20 @@ export default function AssetChart() {
             <YAxis yAxisId="right" orientation="right" domain={[-10, 30]} tickFormatter={(v) => `${v.toFixed(0)}%`} />
           )}
           <Tooltip
-            formatter={(v: any, name: string, props: any) => {
-              const original = props.payload[`${name}_original`];
-              const unit = assetUnits[name] ?? '';
-              const originalText = typeof original === 'number' ? `${original.toFixed(2)} ${unit}` : 'N/A';
-              return [`${v.toFixed?.(2)}% (실제값: ${originalText})`, name];
+            isAnimationActive={false}
+            content={({ payload }) => {
+              if (isPinching || !payload?.length) return null;
+
+              return (
+                <div className="bg-white border px-2 py-1 text-xs text-black shadow">
+                  {payload.map((p, idx) => (
+                    <div key={idx}>
+                      <strong>{p.name}</strong>: {p.value?.toFixed(2)}%<br />
+                      (실제값: {p.payload[`${p.name}_original`]?.toFixed(2)} {assetUnits[p.name]})
+                    </div>
+                  ))}
+                </div>
+              );
             }}
           />
           <Legend />
