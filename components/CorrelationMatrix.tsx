@@ -123,36 +123,31 @@ function CorrelationTrendChart() {
 
   const handleTouchStart = (e: TouchEvent) => {
     if (e.touches.length === 1) {
-      isDragging.current = true;
-      touchStartX.current = e.touches[0].clientX;
+      touchStartRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+      lastViewRange.current = [...viewRange];
     } else if (e.touches.length === 2) {
-      lastTouchDistance.current = getTouchDistance(e.touches);
+      lastTouchDistance.current = getDistance(e.touches);
     }
   };
 
   const handleTouchMove = (e: TouchEvent) => {
-    e.preventDefault(); // 📛 브라우저 확대 방지
-    if (e.touches.length === 1 && isDragging.current) {
-      const deltaX = e.touches[0].clientX - touchStartX.current;
+    if (e.touches.length === 1 && touchStartRef.current) {
+      const deltaX = e.touches[0].clientX - touchStartRef.current.x;
       const offset = Math.round(deltaX / 10);
-      let newStart = Math.max(0, viewRange[0] - offset);
-      let newEnd = newStart + (viewRange[1] - viewRange[0]);
-      if (newEnd > rawData.length) {
-        newEnd = rawData.length;
-        newStart = Math.max(0, newEnd - (viewRange[1] - viewRange[0]));
-      }
+      let newStart = Math.max(0, lastViewRange.current[0] - offset);
+      let newEnd = Math.min(data.length, newStart + (viewRange[1] - viewRange[0]));
       setViewRange([newStart, newEnd]);
-      touchStartX.current = e.touches[0].clientX;
-    } else if (e.touches.length === 2 && lastTouchDistance.current != null) {
-      const newDist = getTouchDistance(e.touches);
-      const delta = newDist - lastTouchDistance.current;
-      const size = viewRange[1] - viewRange[0];
-      let newSize = Math.max(6, Math.min(rawData.length, size - Math.round(delta / 5)));
+    } else if (e.touches.length === 2 && lastTouchDistance.current !== null) {
+      const newDistance = getDistance(e.touches);
+      const scaleChange = newDistance - lastTouchDistance.current;
+      const rangeSize = viewRange[1] - viewRange[0];
+      let newSize = scaleChange > 0 ? rangeSize - 6 : rangeSize + 6;
+      newSize = Math.max(6, Math.min(data.length, newSize));
       const mid = Math.floor((viewRange[0] + viewRange[1]) / 2);
-      let start = Math.max(0, mid - Math.floor(newSize / 2));
-      let end = Math.min(rawData.length, start + newSize);
-      setViewRange([start, end]);
-      lastTouchDistance.current = newDist;
+      let newStart = Math.max(0, mid - Math.floor(newSize / 2));
+      let newEnd = Math.min(data.length, newStart + newSize);
+      setViewRange([newStart, newEnd]);
+      lastTouchDistance.current = newDistance;
     }
   };
 
@@ -172,6 +167,7 @@ function CorrelationTrendChart() {
       ref.addEventListener('touchstart', handleTouchStart, { passive: false });
       ref.addEventListener('touchmove', handleTouchMove, { passive: false });
       ref.addEventListener('touchend', handleTouchEnd);
+
       return () => {
         ref.removeEventListener('wheel', handleWheel);
         ref.removeEventListener('mousedown', handleMouseDown);
@@ -186,7 +182,7 @@ function CorrelationTrendChart() {
   }, [viewRange, data]);
 
   return (
-    <div ref={containerRef} className="bg-white p-4 rounded shadow select-none cursor-grab relative">
+    <div ref={containerRef} className="bg-white p-4 rounded shadow select-none cursor-grab relative touch-none">
       <h2 className="text-xl font-semibold mb-2 text-black">자산 상관관계 변동 싸이클</h2>
 
       {showWarning && (
